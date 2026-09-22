@@ -1,0 +1,1381 @@
+/* ==========================================================================
+   Project X Launcher
+   Palette is taken from the crest: obsidian, worked gold, molten orange.
+
+   Behavioural contract with renderer.js -- do not "tidy" these away:
+     - #loader-container      display toggled block/none  -> centring lives on .loader-inner
+     - #update-available      style attribute REPLACED with display:flex/none
+     - .play-buttons          display toggled flex/block  -> must read well as either
+     - #logout, #add-accounts, label[for=character], #accounts-dropdown-container
+                              display toggled block/none
+     - #embed-overlay.hidden  fades the webview cover out
+     - .auth-hidden / .hidden / .open / .loading / .disabled / .selected / .active
+   ========================================================================== */
+
+:root {
+    --obsidian-0: #08090d;
+    --obsidian-1: #0e1016;
+    --obsidian-2: #14171f;
+    --obsidian-3: #1b1f29;
+    --stone: #232836;
+    --stone-hi: #2e3444;
+
+    --gold: #c8a04a;
+    --gold-hi: #e8c97e;
+    --gold-dim: #8a6f34;
+
+    --molten: #ff6a1f;
+    --molten-hi: #ff8f4d;
+    --molten-dim: #b8430f;
+
+    --text: #e9e5db;
+    --text-dim: #9b968a;
+    --text-faint: #6d695f;
+
+    --danger: #e0503a;
+    --ok: #4fb477;
+
+    --radius: 10px;
+    --radius-sm: 6px;
+    --ring: 0 0 0 1px rgba(200, 160, 74, 0.25);
+    --glow: 0 0 22px rgba(255, 106, 31, 0.25);
+
+    --font: "Segoe UI", Inter, system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    font-size: 14px;
+    color: var(--text);
+    background: var(--obsidian-0);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    /* App chrome should not behave like a document: a stray drag or Ctrl+A
+       otherwise highlights the whole UI. Inputs opt back in below. */
+    user-select: none;
+    cursor: default;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+    user-select: text;
+    cursor: text;
+}
+
+img {
+    -webkit-user-drag: none;
+}
+
+/* Ember wash behind everything. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(1100px 520px at 78% -10%, rgba(255, 106, 31, 0.10), transparent 60%),
+        radial-gradient(760px 420px at 10% 108%, rgba(200, 160, 74, 0.07), transparent 60%);
+}
+
+h1,
+h2,
+h3 {
+    margin: 0;
+    font-weight: 650;
+    letter-spacing: 0.2px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ============================ Title bar ============================ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+.titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 44px;
+    padding: 0 8px 0 6px;
+    background: linear-gradient(180deg, var(--obsidian-3), var(--obsidian-1));
+    border-bottom: 1px solid rgba(200, 160, 74, 0.18);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+    -webkit-app-region: drag;
+    user-select: none;
+    flex: 0 0 auto;
+}
+
+.titlebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.titlebar-brand img {
+    width: 18px;
+    height: 18px;
+    filter: drop-shadow(0 0 5px rgba(255, 106, 31, 0.5));
+    flex: 0 0 auto;
+}
+
+.titlebar-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.35px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.titlebar-button {
+    -webkit-app-region: no-drag;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.titlebar-button:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--text);
+}
+
+.titlebar-button.danger:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
+.titlebar-button.hamburger:hover {
+    color: var(--gold-hi);
+}
+
+.titlebar-controls {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    -webkit-app-region: no-drag;
+}
+
+/* Session block sits between the title and the window controls. */
+.user-session {
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding-right: 6px;
+}
+
+.session-email {
+    font-size: 12px;
+    color: var(--text-dim);
+    max-width: 230px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-email:not(:empty)::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 7px var(--ok);
+    vertical-align: middle;
+}
+
+.session-action {
+    -webkit-app-region: no-drag;
+    padding: 5px 11px;
+    font-size: 11.5px;
+    font-family: inherit;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.session-action:hover {
+    color: var(--gold-hi);
+    border-color: rgba(200, 160, 74, 0.5);
+    background: rgba(200, 160, 74, 0.10);
+}
+
+/* ============================ Layout ============================ */
+
+.main-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.content {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+}
+
+.recent-updates {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
+/* ---------------------------- Hero panel ----------------------------
+   Replaces the old embedded website. Pure CSS/SVG so it stays crisp at any
+   window size and costs no network round-trip on launch. */
+
+.hero {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    overflow: hidden;
+    background:
+        radial-gradient(760px 520px at 50% 42%, rgba(255, 106, 31, 0.13), transparent 68%),
+        radial-gradient(900px 600px at 50% 120%, rgba(200, 160, 74, 0.09), transparent 70%),
+        linear-gradient(180deg, var(--obsidian-1), var(--obsidian-0));
+}
+
+/* Faint vignette at the edges. Lighter than it was, because .hero-scrim now does
+   most of the darkening over the video. */
+.hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow: inset 0 0 120px 26px rgba(0, 0, 0, 0.5);
+}
+
+/* Looping background video. object-fit:cover fills the panel at any window size
+   and crops the overflow rather than letterboxing. */
+.hero-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+/* Keeps the caption readable and softens the join with the sidebar. */
+.hero-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(8, 9, 13, 0.34) 0%, rgba(8, 9, 13, 0) 26%,
+            rgba(8, 9, 13, 0) 52%, rgba(8, 9, 13, 0.82) 100%),
+        linear-gradient(90deg, rgba(8, 9, 13, 0) 78%, rgba(8, 9, 13, 0.55) 100%);
+}
+
+.hero-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 34px;
+    z-index: 2;
+    text-align: center;
+    pointer-events: none;
+}
+
+.hero-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 340px;
+    height: 340px;
+}
+
+/* Slow forge halo turning behind the crest. */
+.hero-halo {
+    position: absolute;
+    width: 330px;
+    height: 330px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+            rgba(255, 106, 31, 0) 0deg,
+            rgba(255, 106, 31, 0.30) 55deg,
+            rgba(232, 201, 126, 0.20) 130deg,
+            rgba(255, 106, 31, 0) 210deg,
+            rgba(255, 106, 31, 0.22) 300deg,
+            rgba(255, 106, 31, 0) 360deg);
+    filter: blur(26px);
+    animation: halo-turn 22s linear infinite;
+}
+
+@keyframes halo-turn {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.hero-crest {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    animation: hero-float 7s ease-in-out infinite;
+    filter: drop-shadow(0 14px 42px rgba(255, 106, 31, 0.42));
+}
+
+@keyframes hero-float {
+
+    0%,
+    100% {
+        transform: translateY(-5px);
+        filter: drop-shadow(0 16px 40px rgba(255, 106, 31, 0.34));
+    }
+
+    50% {
+        transform: translateY(5px);
+        filter: drop-shadow(0 10px 52px rgba(255, 106, 31, 0.55));
+    }
+}
+
+.hero-word {
+    margin-top: 16px;
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: 12px;
+    text-indent: 12px;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #f6e2ac, var(--gold) 58%, var(--gold-dim));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 3px 14px rgba(0, 0, 0, 0.75));
+}
+
+.hero-tagline {
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    letter-spacing: 3.2px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+/* Embers drifting upward. */
+.hero-embers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.hero-embers span {
+    position: absolute;
+    bottom: -14px;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--molten-hi);
+    box-shadow: 0 0 8px 2px rgba(255, 138, 61, 0.65);
+    opacity: 0;
+    animation: ember-rise linear infinite;
+}
+
+@keyframes ember-rise {
+    0% {
+        transform: translateY(0) translateX(0) scale(1);
+        opacity: 0;
+    }
+
+    12% {
+        opacity: 0.85;
+    }
+
+    78% {
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: translateY(-86vh) translateX(26px) scale(0.35);
+        opacity: 0;
+    }
+}
+
+.hero-embers span:nth-child(1)  { left: 10%; animation-duration: 12s; animation-delay: 0s; }
+.hero-embers span:nth-child(2)  { left: 21%; animation-duration: 15s; animation-delay: 2.4s; }
+.hero-embers span:nth-child(3)  { left: 32%; animation-duration: 10s; animation-delay: 4.1s; }
+.hero-embers span:nth-child(4)  { left: 41%; animation-duration: 17s; animation-delay: 1.2s; }
+.hero-embers span:nth-child(5)  { left: 53%; animation-duration: 13s; animation-delay: 6.3s; }
+.hero-embers span:nth-child(6)  { left: 62%; animation-duration: 11s; animation-delay: 3.0s; }
+.hero-embers span:nth-child(7)  { left: 71%; animation-duration: 16s; animation-delay: 7.6s; }
+.hero-embers span:nth-child(8)  { left: 80%; animation-duration: 14s; animation-delay: 5.2s; }
+.hero-embers span:nth-child(9)  { left: 88%; animation-duration: 12.5s; animation-delay: 8.8s; }
+.hero-embers span:nth-child(10) { left: 95%; animation-duration: 18s; animation-delay: 2.0s; }
+
+@media (prefers-reduced-motion: reduce) {
+
+    .hero-halo,
+    .hero-crest,
+    .hero-embers span,
+    .game-logo img,
+    .loader-crest img {
+        animation: none;
+    }
+}
+
+/* ============================ Sidebar ============================ */
+
+.sidebar {
+    flex: 0 0 304px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 18px 22px;
+    overflow-y: auto;
+    background:
+        linear-gradient(180deg, var(--obsidian-2), var(--obsidian-1) 60%, var(--obsidian-0));
+    border-left: 1px solid rgba(200, 160, 74, 0.18);
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+.game-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 4px;
+}
+
+.game-logo img {
+    width: 104px;
+    height: 104px;
+    filter: drop-shadow(0 6px 20px rgba(255, 106, 31, 0.35));
+    animation: crest-breathe 5.5s ease-in-out infinite;
+}
+
+@keyframes crest-breathe {
+
+    0%,
+    100% {
+        filter: drop-shadow(0 6px 18px rgba(255, 106, 31, 0.28));
+    }
+
+    50% {
+        filter: drop-shadow(0 6px 26px rgba(255, 106, 31, 0.48));
+    }
+}
+
+.game-logo-word {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 3.4px;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Divider used between sidebar blocks. */
+.sidebar > * + * {
+    position: relative;
+}
+
+/* ============================ Buttons ============================ */
+
+/* .play-buttons is toggled between flex and block, so it must read well as both. */
+.play-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.play-buttons > button {
+    display: block;
+    width: 100%;
+}
+
+.play-buttons > button + button {
+    margin-top: 10px;
+}
+
+/* When the container is flex, gap already spaces them -- drop the margin. */
+.play-buttons:not([style*="block"]) > button + button {
+    margin-top: 0;
+}
+
+.play-button,
+.add-accounts,
+.logout-button,
+.loadingButton {
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 11px 16px;
+    color: var(--text);
+    background: linear-gradient(180deg, var(--stone-hi), var(--stone));
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.play-button:hover,
+.add-accounts:hover,
+.logout-button:hover,
+.loadingButton:hover {
+    border-color: rgba(200, 160, 74, 0.55);
+    box-shadow: var(--ring);
+    transform: translateY(-1px);
+}
+
+.play-button:active,
+.loadingButton:active {
+    transform: translateY(0);
+}
+
+/* Primary call to action -- molten. */
+.play-button.primary,
+#update-now-btn {
+    color: #1a0d05;
+    background: linear-gradient(180deg, var(--molten-hi), var(--molten));
+    border-color: rgba(255, 138, 61, 0.7);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.play-button.primary:hover,
+#update-now-btn:hover {
+    background: linear-gradient(180deg, #ffa063, var(--molten-hi));
+    box-shadow: var(--glow);
+    border-color: var(--molten-hi);
+}
+
+.account-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.account-actions > button {
+    flex: 1;
+    padding: 9px 10px;
+    font-size: 12.5px;
+}
+
+.logout-button:hover {
+    border-color: rgba(224, 80, 58, 0.6);
+    color: #ffb4a8;
+    box-shadow: 0 0 0 1px rgba(224, 80, 58, 0.25);
+}
+
+/* Busy / disabled states driven by renderer.js */
+.loadingButton.loading,
+.loadingButton.disabled,
+.loadingButton:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.loadingButton.loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.loadingButton.loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 15px;
+    height: 15px;
+    margin: -7.5px 0 0 -7.5px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: var(--gold-hi);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================ Form controls ============================ */
+
+.game-info,
+.proxy-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius);
+}
+
+.game-info label,
+.proxy-section label {
+    margin-top: 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.game-info label:first-child,
+.proxy-section label:first-child {
+    margin-top: 0;
+}
+
+.hint {
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    text-transform: none;
+    color: var(--text-faint);
+    opacity: 0.8;
+}
+
+select,
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+    width: 100%;
+    padding: 9px 11px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--obsidian-1);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+        linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 30px;
+    cursor: pointer;
+}
+
+select:hover,
+input:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+select:focus,
+input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(200, 160, 74, 0.15);
+}
+
+input::placeholder {
+    color: var(--text-faint);
+}
+
+option {
+    background: var(--obsidian-2);
+    color: var(--text);
+}
+
+.account-select-hidden {
+    display: none !important;
+}
+
+.accounts-refresh-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+/* renderer.js hides #accounts-dropdown-container when there are no Jagex
+   accounts, which would otherwise leave the refresh button stranded on its
+   own row. Fold the whole row away with it. */
+.accounts-refresh-row:has(> .accounts-dropdown-container[style*="display: none"]),
+.accounts-refresh-row:has(> .accounts-dropdown-container[style*="display:none"]) {
+    display: none;
+}
+
+.accounts-dropdown-container {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.refresh-accounts-btn {
+    flex: 0 0 auto;
+    width: 36px;
+    /* height comes from the row's align-items:stretch so it matches the toggle */
+    font-size: 15px;
+    line-height: 1;
+    color: var(--text-dim);
+    background: var(--obsidian-1);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.refresh-accounts-btn:hover {
+    color: var(--gold-hi);
+    border-color: rgba(200, 160, 74, 0.5);
+    transform: rotate(90deg);
+}
+
+/* ---- Account picker ----
+   renderer.js builds this whole subtree at runtime once accounts exist, so none
+   of it appears in index.html. Class names are fixed by buildAccountsDropdown();
+   the panel must stay absolutely positioned and hidden until .open. */
+
+.accounts-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.accounts-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    color: var(--text);
+    background: var(--obsidian-1);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.accounts-dropdown-toggle:hover {
+    border-color: rgba(200, 160, 74, 0.5);
+}
+
+.accounts-dropdown-toggle:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(200, 160, 74, 0.15);
+}
+
+.accounts-dropdown-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.accounts-dropdown-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #1a0d05;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    border-radius: 999px;
+}
+
+.accounts-dropdown-icon {
+    font-size: 11px;
+    color: var(--text-dim);
+    transition: transform 0.18s ease;
+}
+
+.accounts-dropdown.open .accounts-dropdown-icon {
+    transform: rotate(180deg);
+}
+
+.accounts-dropdown-panel {
+    display: none;
+    position: absolute;
+    left: 0;
+    width: 100%;
+    margin-top: 6px;
+    max-height: 300px;
+    overflow: hidden;
+    z-index: 20;
+    background: var(--obsidian-2);
+    border: 1px solid rgba(200, 160, 74, 0.30);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.66);
+}
+
+.accounts-dropdown.open .accounts-dropdown-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.accounts-search-wrapper {
+    padding: 9px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.accounts-search-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    background: var(--obsidian-0);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-sm);
+    outline: none;
+}
+
+.accounts-search-input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(200, 160, 74, 0.15);
+}
+
+.accounts-search-input::placeholder {
+    color: var(--text-faint);
+}
+
+.accounts-options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    overflow-y: auto;
+}
+
+.account-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--radius-sm);
+    transition: background 0.13s ease;
+}
+
+.account-option:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.account-option.selected {
+    background: rgba(200, 160, 74, 0.16);
+}
+
+.account-option.selected .account-option-name {
+    color: var(--gold-hi);
+    font-weight: 700;
+}
+
+.account-option-name {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-option-name:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.account-option-delete {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 4px;
+    padding: 0;
+    font-size: 12px;
+    line-height: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.15s ease;
+}
+
+.account-option:hover .account-option-delete {
+    opacity: 0.9;
+}
+
+.account-option-delete:hover {
+    opacity: 1;
+    background: rgba(224, 80, 58, 0.18);
+    border-color: rgba(224, 80, 58, 0.55);
+}
+
+.account-option-delete:focus-visible {
+    outline: none;
+    border-color: var(--danger);
+}
+
+.accounts-options-empty {
+    padding: 14px 10px;
+    font-size: 12.5px;
+    text-align: center;
+    color: var(--text-faint);
+}
+
+/* ============================ App menu ============================ */
+
+.app-menu {
+    position: absolute;
+    top: 42px;
+    left: 8px;
+    z-index: 200;
+    min-width: 186px;
+    padding: 6px;
+    background: var(--obsidian-2);
+    border: 1px solid rgba(200, 160, 74, 0.30);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.66);
+}
+
+.app-menu.hidden {
+    display: none !important;
+}
+
+.menu-root,
+.submenu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.menu-item,
+.submenu-item {
+    position: relative;
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.13s ease, color 0.13s ease;
+}
+
+.menu-item:hover,
+.submenu-item:hover {
+    background: rgba(200, 160, 74, 0.15);
+    color: var(--gold-hi);
+}
+
+.menu-caret {
+    float: right;
+    margin-left: 18px;
+    color: var(--text-faint);
+}
+
+.submenu {
+    display: none;
+    position: absolute;
+    top: -6px;
+    left: 100%;
+    min-width: 188px;
+    padding: 6px;
+    background: var(--obsidian-2);
+    border: 1px solid rgba(200, 160, 74, 0.30);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.66);
+}
+
+.menu-item.has-sub:hover > .submenu,
+.menu-item.has-sub.open > .submenu {
+    display: block;
+}
+
+/* renderer.js adds .closing on pointerleave and hides the root menu after a
+   delay. Without this the submenu would vanish instantly while the root
+   lingers; keeping it visible lets the two disappear together. */
+.app-menu.closing .submenu {
+    display: block !important;
+}
+
+/* ============================ Loader ============================ */
+
+#loader-container {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 125;
+    background: rgba(8, 9, 13, 0.88);
+    backdrop-filter: blur(3px);
+}
+
+.loader-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(440px, 82vw);
+    padding: 30px 28px 26px;
+    text-align: center;
+    background: linear-gradient(180deg, var(--obsidian-3), var(--obsidian-1));
+    border: 1px solid rgba(200, 160, 74, 0.32);
+    border-radius: 14px;
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.loader-crest img {
+    width: 104px;
+    height: 104px;
+    filter: drop-shadow(0 0 22px rgba(255, 106, 31, 0.45));
+    animation: crest-breathe 3.4s ease-in-out infinite;
+}
+
+#loader-container h1 {
+    margin: 14px 0 20px;
+    font-size: 17px;
+    letter-spacing: 0.4px;
+}
+
+#loader {
+    height: 22px;
+    background: var(--obsidian-0);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+#progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 0;
+    height: 100%;
+    font-size: 11px;
+    font-weight: 700;
+    color: #1a0d05;
+    background: linear-gradient(90deg, var(--molten-dim), var(--molten), var(--gold-hi));
+    border-radius: 999px;
+    transition: width 0.3s ease;
+    white-space: nowrap;
+}
+
+#status {
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    min-height: 18px;
+}
+
+/* ============================ Update banner ============================ */
+
+.featured {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    z-index: 100;
+    background: linear-gradient(180deg, var(--obsidian-3), var(--obsidian-1));
+    border-top: 1px solid rgba(200, 160, 74, 0.34);
+    box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.6);
+}
+
+/* renderer.js replaces the style attribute with display:flex / display:none */
+#update-available {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px 6px;
+    text-align: center;
+}
+
+.update-badge {
+    padding: 3px 11px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: #1a0d05;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    border-radius: 999px;
+}
+
+#update-available h2 {
+    margin: 11px 0 5px;
+    font-size: 17px;
+}
+
+#update-available p {
+    margin: 0 0 16px;
+    max-width: 520px;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+#update-available strong {
+    color: var(--gold-hi);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    width: auto;
+}
+
+.modal-actions button {
+    min-width: 176px;
+    margin-bottom: 18px;
+}
+
+.loadingButton.ghost,
+#remind-me-later-btn {
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.loadingButton.ghost:hover,
+#remind-me-later-btn:hover {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.34);
+    box-shadow: none;
+}
+
+/* ============================ Auth modals ============================ */
+
+.auth-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6, 7, 10, 0.93);
+    backdrop-filter: blur(5px);
+    -webkit-app-region: no-drag;
+}
+
+.auth-modal.auth-hidden {
+    display: none !important;
+}
+
+.auth-hidden {
+    display: none !important;
+}
+
+.auth-card {
+    width: min(400px, 90vw);
+    padding: 28px 30px 26px;
+    text-align: center;
+    background: linear-gradient(180deg, var(--obsidian-3), var(--obsidian-1));
+    border: 1px solid rgba(200, 160, 74, 0.32);
+    border-radius: 16px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.auth-crest img {
+    width: 72px;
+    height: 72px;
+    filter: drop-shadow(0 0 18px rgba(255, 106, 31, 0.42));
+}
+
+.auth-title {
+    margin: 12px 0 4px;
+    font-size: 21px;
+    letter-spacing: 2.6px;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.auth-subtitle {
+    margin: 0 0 20px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 18px;
+    background: rgba(0, 0, 0, 0.36);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.auth-tab:hover {
+    color: var(--text);
+}
+
+.auth-tab.active {
+    color: #1a0d05;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+
+.auth-form.auth-hidden {
+    display: none !important;
+}
+
+.auth-form label {
+    margin-top: 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.auth-form label:first-child {
+    margin-top: 0;
+}
+
+.auth-submit {
+    margin-top: 20px;
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: #1a0d05;
+    background: linear-gradient(180deg, var(--molten-hi), var(--molten));
+    border: 1px solid rgba(255, 138, 61, 0.7);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.auth-submit:hover {
+    background: linear-gradient(180deg, #ffa063, var(--molten-hi));
+    box-shadow: var(--glow);
+}
+
+.auth-submit:disabled,
+.auth-submit.loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.auth-cancel {
+    margin-top: 14px;
+    padding: 9px 18px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.auth-cancel:hover {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.auth-error {
+    margin: 14px 0 0;
+    min-height: 17px;
+    font-size: 12.5px;
+    color: #ff8f7a;
+}
+
+.auth-error.success {
+    color: var(--ok);
+}
+
+/* ============================ Scrollbars ============================ */
+
+::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--obsidian-0);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--stone);
+    border-radius: 999px;
+    border: 2px solid var(--obsidian-0);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gold-dim);
+}

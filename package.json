@@ -1,0 +1,123 @@
+{
+  "name": "projectx-launcher",
+  "version": "3.2.8",
+  "description": "Launcher for the projectx client",
+  "main": "main.js",
+  "scripts": {
+    "dev": "cross-env DEBUG=true electron .",
+    "dev:mock": "cross-env DEBUG=true MOCK_AUTH=1 MOCK_USERS='demo@projectx.com:DemoPassword123,test@example.com:TestPassword123' electron .",
+    "start": "electron-forge start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "release": "electron-builder --publish always",
+    "linux": "electron-builder --linux",
+    "mac": "electron-builder --mac"
+  },
+  "author": "Mocrosoft",
+  "license": "ISC",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-rpm": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
+    "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron/fuses": "^1.8.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^26.0.12",
+    "jest": "^30.2.0"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.15",
+    "applicationinsights": "^2.9.6",
+    "axios": "^1.7.2",
+    "cheerio": "1.1.2",
+    "detect-browsers": "^6.1.0",
+    "electron-log": "^5.4.1",
+    "electron-updater": "^6.1.8",
+    "patchright": "^1.52.5",
+    "playwright": "^1.54.1",
+    "update-electron-app": "^3.0.0"
+  },
+  "build": {
+    "asar": "true",
+    "appId": "com.projectx.launcher",
+    "productName": "Project X Launcher",
+    "files": [
+      "main.js",
+      "renderer.js",
+      "preload.js",
+      "package.json",
+      "!**/*.map",
+      "images/**",
+      "assets/**",
+      "libs/**",
+      "index.html",
+      "css/**",
+      "build/READ THIS BEFORE INSTALL.html"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "images/projectx_transparent.ico"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": "default",
+      "icon": "images/projectx_transparent.icns"
+    },
+    "dmg": {
+      "icon": "images/projectx_transparent.icns",
+      "background": "images/dmg-background.png",
+      "title": "${productName} Installer",
+      "iconSize": 108,
+      "contents": [
+        {
+          "x": 530,
+          "y": 192,
+          "type": "file",
+          "path": "./build/READ THIS BEFORE INSTALL.html"
+        },
+        {
+          "x": 200,
+          "y": 400,
+          "type": "file"
+        },
+        {
+          "x": 730,
+          "y": 495,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "snap"
+      ],
+      "icon": "images/projectx_transparent.png",
+      "category": "Game"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Project X Launcher"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "iEasyScript",
+      "repo": "xclient-launcher"
+    }
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.2"
+  }
+}
