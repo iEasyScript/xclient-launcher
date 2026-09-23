@@ -12,8 +12,10 @@ module.exports = async function (deps) {
         app
     } = deps;
 
-    const url = 'https:/microbot.cloud';
-    const filestorage = 'https://files.microbot.cloud';
+    const site = 'https://xclient.dev';
+    // Releases are served from GitHub, so the launcher needs no file host of its own.
+    const releases = 'https://github.com/iEasyScript/xclient/releases/download';
+    const releasesApi = 'https://api.github.com/repos/iEasyScript';
 
     const { startAuthFlow } = require(path.join(
         projectDir,
@@ -121,10 +123,7 @@ module.exports = async function (deps) {
     });
 
     ipcMain.handle('download-client', async (event, version) => {
-        // Remote path stays on the upstream naming: we still pull the client jar
-        // from chsami's file storage until we host our own. Only the local
-        // filename below is ours.
-        const url = `${filestorage}/releases/microbot/stable/microbot-${version}.jar`;
+        const url = `${releases}/${version}/projectx-${version}.jar`;
         try {
             event.sender.send('progress', {
                 percent: 90,
@@ -185,8 +184,9 @@ module.exports = async function (deps) {
 
     ipcMain.handle('fetch-launcher-version', async () => {
         try {
-            const response = await axios.get(url + '/api/version/launcher');
-            return response.data;
+            // The newest published launcher is whatever the latest release is tagged.
+            const response = await axios.get(`${releasesApi}/xclient-launcher/releases/latest`);
+            return String(response.data.tag_name ?? '').replace(/^v/, '');
         } catch (error) {
             log.error(`Error fetching launcher version: ${error}`);
             return { error: error.message };
@@ -194,16 +194,15 @@ module.exports = async function (deps) {
     });
 
     ipcMain.handle('fetch-client-version', async () => {
-        // A locally installed Project X build (tools/install-client.sh) wins over
-        // the upstream version feed. Otherwise the launcher sees upstream's newer
-        // number, offers to "update" to chsami's jar, and its cleanup deletes ours.
+        // A locally built client wins over the published one, so a development
+        // build is not treated as out of date and deleted by the cleanup.
         const localVersion = newestInstalledClientVersion();
         if (localVersion) {
             return localVersion;
         }
         try {
-            const response = await axios.get(url + '/api/version/client');
-            return response.data;
+            const response = await axios.get(`${releasesApi}/xclient/releases/latest`);
+            return String(response.data.tag_name ?? '').replace(/^v/, '');
         } catch (error) {
             log.error(`Error fetching client version: ${error}`);
             return { error: error.message };

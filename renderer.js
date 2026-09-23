@@ -1682,7 +1682,7 @@ function loadLandingPageWebview() {
     const webview = document.getElementById('website');
     const webviewOverlay = document.getElementById('embed-overlay');
     if (webview) {
-        webview.src = 'https://www.themicrobot.com?source=launcher';
+        webview.src = 'https://www.xclient.dev?source=launcher';
         webview.addEventListener('dom-ready', () => {
             try {
                 webview

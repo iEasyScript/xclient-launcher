@@ -15,7 +15,8 @@ describe('fetch-client-version IPC handler', () => {
     beforeEach(async () => {
         testTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pxtest-'));
         registeredHandlers = {};
-        axios = { get: jest.fn().mockResolvedValue({ data: '9.9.9' }) };
+        // The client version is the tag of the newest release on GitHub.
+        axios = { get: jest.fn().mockResolvedValue({ data: { tag_name: 'v9.9.9' } }) };
 
         const ipcHandlersFn = require('../libs/ipc-handlers.js');
         await ipcHandlersFn({
@@ -57,12 +58,13 @@ describe('fetch-client-version IPC handler', () => {
         expect(axios.get).not.toHaveBeenCalled();
     });
 
-    test('falls back to the remote feed when no client is installed', async () => {
+    test('falls back to the latest release when no client is installed', async () => {
         const version = await registeredHandlers['fetch-client-version']();
 
+        // The leading "v" of a tag is not part of the version.
         expect(version).toBe('9.9.9');
         expect(axios.get).toHaveBeenCalledWith(
-            expect.stringContaining('/api/version/client')
+            expect.stringContaining('/xclient/releases/latest')
         );
     });
 });

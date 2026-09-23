@@ -92,7 +92,7 @@ If you have any questions, please join our [Discord](https://discord.gg/zaGrfqFE
 
 If you enjoy my open source work and would like to support me, consider buying me a coffee! Your support helps me stay caffeinated and motivated to keep improving and creating awesome projects.
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow)](https://www.paypal.com/paypalme/MicrobotBE?country.x=BE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow)](https://www.paypal.com/paypalme/ProjectX?country.x=BE)
 
 Thank you for your support! 😊
 
@@ -100,8 +100,7 @@ Thank you for your support! 😊
 
 ## Credits and licence
 
-Forked from [Microbot-Launcher](https://github.com/chsami/Microbot-Launcher) by chsami.
-Licensed under the **GNU GPL v3** &mdash; see [LICENSE](LICENSE). If you distribute a build of this
-launcher, you must make the corresponding source available under the same licence.
+Licensed under the **GNU GPL v3** &mdash; see [LICENSE](LICENSE). If you distribute a build of
+this launcher, you must make the corresponding source available under the same licence.
 
 Not affiliated with, endorsed by, or sponsored by Jagex Ltd.
