@@ -137,7 +137,8 @@ package-lock.json
 .DS_Store
 package-lock.json
 
-# Large local media (transcode before shipping)
+# The 470 MB master. assets/hero.mp4 is the transcoded copy that ships, and is
+# committed: without it the installer has no hero video at all.
 assets/video.mp4
 
 # Gradle wrapper for the IDE tool window only. ./build is electron-builder's

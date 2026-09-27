@@ -55,6 +55,7 @@
       "!**/*.map",
       "images/**",
       "assets/**",
+      "!assets/video.mp4",
       "libs/**",
       "index.html",
       "css/**",
