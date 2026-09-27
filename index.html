@@ -20,6 +20,32 @@
             <h1 class="auth-title">Project X</h1>
             <p class="auth-subtitle">Sign in to continue</p>
 
+            <!-- Discord sign-in by pairing code. The launcher never handles a
+                 password: the browser does the Discord OAuth, this waits. -->
+            <div id="discord-auth" class="discord-auth">
+                <p class="auth-subtitle">Sign in with your Discord account to buy and run scripts.</p>
+
+                <button id="discord-signin" type="button" class="auth-submit discord-submit">
+                    Sign in with Discord
+                </button>
+
+                <div id="pair-pending" class="pair-pending auth-hidden">
+                    <p class="pair-instruction">Approve this launcher in your browser:</p>
+                    <p id="pair-code" class="pair-code" aria-live="polite"></p>
+                    <p class="pair-hint">
+                        Check the code on the website matches this one, then approve it.
+                    </p>
+                    <a id="pair-link" class="pair-link" href="#" target="_blank" rel="noreferrer">
+                        Open the page again
+                    </a>
+                    <button id="pair-cancel" type="button" class="auth-cancel">Cancel</button>
+                </div>
+
+                <p id="discord-auth-error" class="auth-error" role="alert" aria-live="polite"></p>
+            </div>
+
+            <!-- The launcher's own mock login, for UI work with MOCK_AUTH=1. -->
+            <div id="mock-auth" class="auth-hidden">
             <div class="auth-tabs" role="tablist">
                 <button id="auth-tab-signin" class="auth-tab active" data-target="signin" role="tab"
                     aria-selected="true">Sign In</button>
@@ -48,6 +74,7 @@
             </form>
 
             <p id="auth-error" class="auth-error" role="alert" aria-live="polite"></p>
+            </div>
         </div>
     </div>
 

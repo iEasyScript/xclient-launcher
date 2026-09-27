@@ -49,6 +49,23 @@ npm install
 npm run dev
 ```
 
+### Or from Gradle
+
+The launcher ships a Gradle build so it appears in the same IntelliJ Gradle tool
+window as the client, the hub and the web marketplace. It compiles nothing — every
+task is a wrapper around the npm script of the same name, and npm still does the work.
+
+```bash
+./gradlew dev      # start the launcher with DEBUG logging
+./gradlew devMock  # start it with mock auth and seeded demo users
+./gradlew test     # run the jest suite
+./gradlew build    # package an installer for this machine into dist/
+```
+
+`dev` runs until you stop it, so a non-zero exit from killing the window is not
+treated as a build failure. In the IDE there is a **Launcher dev** run configuration
+that does the same thing.
+
 ## Mock Authentication Mode
 
 The launcher now includes an optional in-memory authentication flow that can be enabled for UI testing and demos.
@@ -59,15 +76,20 @@ The launcher now includes an optional in-memory authentication flow that can be 
 
 When mock mode is disabled, the launcher skips the mock login screen and behaves as before.
 
-## Package for Windows
-For 64-bit
+## Packaging
+
 ```bash
-npm run build:x64
+npm run win    # NSIS installer, no publish
+npm run mac    # requires macOS
+npm run linux  # AppImage and snap, requires Linux tooling
 ```
-For 32-bit
-```bash
-npm run build:ia32
-```
+
+Output lands in `dist/`. `npm run release` is the only script that publishes a
+GitHub release &mdash; the three above stay local.
+
+Note that `./build` is electron-builder's `buildResources` directory, not a build
+output: the installer README committed there ships inside the NSIS and DMG targets.
+Gradle's own output is redirected to `.gradle/` so it never mixes into it.
 
 ## Steps to Contribute:
 1. Fork the repository

@@ -51,6 +51,20 @@ async function loadLibraries() {
             mainWindow: mainWindow
         };
         try {
+            const accountHandler = require(path.join(
+                __dirname,
+                'libs',
+                'projectx-account.js'
+            ));
+            const account = accountHandler({ ipcMain, app, shell, log });
+            // jar-executor reads this when it spawns the client, so the client
+            // starts as whoever is signed in to the launcher.
+            deps.currentAccountToken = account.currentToken;
+        } catch (accountError) {
+            log.error('Error requiring projectx-account:', accountError);
+        }
+
+        try {
             const mockAuthHandler = require(path.join(
                 __dirname,
                 'libs',

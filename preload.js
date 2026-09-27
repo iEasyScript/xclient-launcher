@@ -74,6 +74,22 @@ contextBridge.exposeInMainWorld('electron', {
     updateClientJarTTL: (version) =>
         ipcRenderer.invoke('update-client-jar-ttl', version),
     refreshAccounts: () => ipcRenderer.invoke('refresh-accounts'),
+    /**
+     * The Project X account: Discord sign-in by way of the website, and the
+     * identity the client runs as. Distinct from `auth`, which is the launcher's
+     * own mock login, and from the Jagex OAuth flow, which authenticates game
+     * accounts rather than users.
+     */
+    projectx: {
+        session: () => ipcRenderer.invoke('projectx:session'),
+        pairStart: () => ipcRenderer.invoke('projectx:pair-start'),
+        pairCancel: () => ipcRenderer.invoke('projectx:pair-cancel'),
+        signout: () => ipcRenderer.invoke('projectx:signout'),
+        onPairUpdate: (callback) =>
+            ipcRenderer.on('projectx:pair-update', (_event, payload) =>
+                callback(payload)
+            )
+    },
     auth: {
         signup: (credentials) => ipcRenderer.invoke('auth:signup', credentials),
         signin: (credentials) => ipcRenderer.invoke('auth:signin', credentials),

@@ -183,6 +183,22 @@ async function handleSignOut() {
     if (!mockAuthEnabled) return;
     const button = $('signout-btn');
     setButtonLoading(button, true, 'Signing Out...');
+
+    if (!mockAuthEnabled) {
+        try {
+            await window.electron.projectx.signout();
+            updateProjectXIdentity(null);
+            setAuthMode('discord');
+            hidePairingCode();
+            showAuthModal();
+        } catch (error) {
+            window.electron.errorAlert(error?.message || 'Unable to sign out.');
+        } finally {
+            setButtonLoading(button, false);
+        }
+        return;
+    }
+
     try {
         const result = await window.electron.auth.signout();
         if (result?.success) {
@@ -248,7 +264,139 @@ function setupAuthUI() {
     $('change-password-btn')?.addEventListener('click', showChangePasswordModal);
     $('change-password-cancel')?.addEventListener('click', hideChangePasswordModal);
     $('change-password-form')?.addEventListener('submit', handleChangePassword);
+    $('discord-signin')?.addEventListener('click', handleDiscordSignIn);
+    $('pair-cancel')?.addEventListener('click', handlePairCancel);
+    window.electron.projectx?.onPairUpdate(handlePairUpdate);
     setActiveAuthTab('signin');
+}
+
+/** The Project X account, as opposed to the launcher's mock login. */
+let projectxUser = null;
+
+function setAuthMode(mode) {
+    toggleClass($('discord-auth'), 'auth-hidden', mode !== 'discord');
+    toggleClass($('mock-auth'), 'auth-hidden', mode !== 'mock');
+}
+
+function showPairingCode(userCode, verificationUrl) {
+    const pending = $('pair-pending');
+    const code = $('pair-code');
+    const link = $('pair-link');
+
+    if (code) code.textContent = userCode;
+    if (link && verificationUrl) link.href = verificationUrl;
+    toggleClass(pending, 'auth-hidden', false);
+    toggleClass($('discord-signin'), 'auth-hidden', true);
+}
+
+function hidePairingCode() {
+    toggleClass($('pair-pending'), 'auth-hidden', true);
+    toggleClass($('discord-signin'), 'auth-hidden', false);
+}
+
+function updateProjectXIdentity(user) {
+    projectxUser = user || null;
+
+    const container = $('user-session');
+    const label = $('session-email');
+    if (!container || !label) return;
+
+    if (!projectxUser) {
+        // Mock mode owns this area when it is running; otherwise nothing to show.
+        if (!mockAuthEnabled) {
+            container.classList.add('hidden');
+            label.textContent = '';
+        }
+        return;
+    }
+
+    // The role is worth showing: it is why Developer Tools appears in the client.
+    const name = projectxUser.name || projectxUser.discordUsername || 'Signed in';
+    label.textContent =
+        projectxUser.role && projectxUser.role !== 'USER'
+            ? `${name} (${projectxUser.role.toLowerCase()})`
+            : name;
+    container.classList.remove('hidden');
+}
+
+async function handleDiscordSignIn() {
+    const button = $('discord-signin');
+    setAuthError('', 'discord-auth-error');
+    setButtonLoading(button, true, 'Opening browser...');
+
+    try {
+        const result = await window.electron.projectx.pairStart();
+        if (result?.error) {
+            setAuthError(result.error, 'discord-auth-error');
+            return;
+        }
+        showPairingCode(result.userCode, result.verificationUrl);
+    } catch (error) {
+        setAuthError(
+            error?.message || 'Could not start the sign-in.',
+            'discord-auth-error'
+        );
+    } finally {
+        setButtonLoading(button, false);
+    }
+}
+
+async function handlePairCancel() {
+    try {
+        await window.electron.projectx.pairCancel();
+    } catch (_) {
+        /* cancelling is best effort */
+    }
+    hidePairingCode();
+    setAuthError('', 'discord-auth-error');
+}
+
+/**
+ * Called when the main process finishes polling: either we are signed in, or the
+ * pairing failed and the user needs to start again.
+ */
+async function handlePairUpdate(payload) {
+    if (payload?.state === 'signed-in') {
+        hidePairingCode();
+        setAuthError('', 'discord-auth-error');
+        await refreshProjectXSession();
+        return;
+    }
+
+    hidePairingCode();
+    setAuthError(
+        payload?.message || 'That sign-in could not be completed.',
+        'discord-auth-error'
+    );
+}
+
+/**
+ * Gates the launcher on a Project X account. The client is launched with this
+ * user's token, so starting the launcher signed out would mean paid scripts
+ * silently not running.
+ */
+async function refreshProjectXSession() {
+    let session = null;
+    try {
+        session = await window.electron.projectx.session();
+    } catch (error) {
+        session = null;
+    }
+
+    if (session?.signedIn) {
+        updateProjectXIdentity(session.user);
+        hideAuthModal();
+        await ensureLauncherInitialized();
+        return true;
+    }
+
+    updateProjectXIdentity(null);
+    if (session?.message) {
+        setAuthError(session.message, 'discord-auth-error');
+    }
+    setAuthMode('discord');
+    showAuthModal();
+    return false;
 }
 
 async function refreshAuthStatus() {
@@ -261,12 +409,15 @@ async function refreshAuthStatus() {
 
     mockAuthEnabled = Boolean(status?.mock);
     if (!mockAuthEnabled) {
-        hideAuthModal();
         hideChangePasswordModal();
-        updateSessionEmail(status?.user?.email || '');
-        await ensureLauncherInitialized();
+        setAuthMode('discord');
+        await refreshProjectXSession();
         return;
     }
+
+    // Mock mode keeps the old email/password card, so UI work does not need a
+    // website or a Discord app.
+    setAuthMode('mock');
 
     if (status?.authenticated) {
         hideAuthModal();

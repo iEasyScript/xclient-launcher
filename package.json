@@ -11,6 +11,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "release": "electron-builder --publish always",
+    "win": "electron-builder --win --publish never",
     "linux": "electron-builder --linux",
     "mac": "electron-builder --mac"
   },
@@ -27,7 +28,7 @@
     "@electron/fuses": "^1.8.0",
     "cross-env": "^7.0.3",
     "electron": "^33.2.0",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "^26.15.3",
     "jest": "^30.2.0"
   },
   "dependencies": {
@@ -116,8 +117,5 @@
       "owner": "iEasyScript",
       "repo": "xclient-launcher"
     }
-  },
-  "optionalDependencies": {
-    "fsevents": "^2.3.2"
   }
 }

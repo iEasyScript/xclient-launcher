@@ -1359,6 +1359,69 @@ option {
     color: var(--ok);
 }
 
+/* ======================= Discord sign-in / pairing ======================= */
+
+.discord-auth {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Discord's own blurple, so the button reads as "this goes to Discord". */
+.discord-submit {
+    width: 100%;
+    color: #fff;
+    background: linear-gradient(180deg, #5865f2, #4752c4);
+    border: 1px solid rgba(88, 101, 242, 0.8);
+}
+
+.discord-submit:hover {
+    background: linear-gradient(180deg, #6b76f5, #5865f2);
+    box-shadow: 0 0 18px rgba(88, 101, 242, 0.45);
+}
+
+.pair-pending {
+    margin-top: 18px;
+    text-align: center;
+}
+
+.pair-instruction {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
+/*
+ * The code is read off this screen and checked against a browser, so it is set
+ * as large and as widely spaced as the card allows.
+ */
+.pair-code {
+    margin: 12px 0 6px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    color: var(--molten-hi);
+    text-shadow: 0 0 14px rgba(255, 138, 61, 0.35);
+}
+
+.pair-hint {
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--text-faint, var(--text-dim));
+}
+
+.pair-link {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--molten-hi);
+    text-decoration: none;
+}
+
+.pair-link:hover {
+    text-decoration: underline;
+}
+
 /* ============================ Scrollbars ============================ */
 
 ::-webkit-scrollbar {

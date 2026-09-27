@@ -1,6 +1,14 @@
 module.exports = async function (deps) {
     const { spawn, path, dialog, shell, log, fs, projectxDir, ipcMain } = deps;
 
+    /**
+     * Supplied by libs/projectx-account.js. Absent in tests, and absent when the
+     * user has not signed in -- in both cases the client falls back to whatever
+     * token is in its own settings.
+     */
+    const currentAccountToken =
+        typeof deps.currentAccountToken === 'function' ? deps.currentAccountToken : () => null;
+
     const cliRamValue = extractRamValue(process.argv);
     const cliMemory = buildMemoryArgsFromRam(cliRamValue, log, '--ram');
     const defaultMemoryConfig =
@@ -278,6 +286,20 @@ module.exports = async function (deps) {
         if (!process.env.DEBUG)
             extraArgs = { stdio: 'ignore', windowsHide: true };
 
+        /**
+         * The signed-in user's API token reaches the client through the
+         * environment rather than the command line: arguments are visible to
+         * every other process on the machine, and this is a bearer credential
+         * for their account.
+         */
+        const accountToken = currentAccountToken();
+        const childEnv = accountToken
+            ? { ...process.env, PROJECTX_ACCOUNT_TOKEN: accountToken }
+            : process.env;
+        if (accountToken) {
+            log.info('Launching client signed in to Project X');
+        }
+
         // use javaw on windows to avoid console window popping up
         const javaCommand = process.platform === 'win32' ? 'javaw' : 'java';
 
@@ -286,6 +308,7 @@ module.exports = async function (deps) {
         try {
             jarProcess = spawn(javaCommand, commandArgs, {
                 detached: true,
+                env: childEnv,
                 ...extraArgs
             });
 

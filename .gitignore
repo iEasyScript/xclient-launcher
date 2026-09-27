@@ -139,3 +139,7 @@ package-lock.json
 
 # Large local media (transcode before shipping)
 assets/video.mp4
+
+# Gradle wrapper for the IDE tool window only. ./build is electron-builder's
+# buildResources and stays tracked, so Gradle's own output goes under .gradle instead.
+.gradle
