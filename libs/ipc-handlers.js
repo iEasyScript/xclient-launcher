@@ -194,19 +194,41 @@ module.exports = async function (deps) {
     });
 
     ipcMain.handle('fetch-client-version', async () => {
-        // A locally built client wins over the published one, so a development
-        // build is not treated as out of date and deleted by the cleanup.
-        const localVersion = newestInstalledClientVersion();
-        if (localVersion) {
-            return localVersion;
+        /*
+         * The published release decides which client to run, not whatever
+         * happens to be on disk.
+         *
+         * This used to prefer the newest installed jar, which quietly stranded
+         * anyone whose local version sorted higher than the published one --
+         * exactly what happened when versioning restarted at 1.0.0 and an
+         * installed 2.6.22 outranked it forever. A local jar is now only a
+         * fallback for when the release cannot be reached at all, so an offline
+         * launcher still starts with what it already has.
+         *
+         * Set PROJECTX_CLIENT_VERSION to pin a locally built client instead.
+         */
+        const pinned = (process.env.PROJECTX_CLIENT_VERSION || '').trim();
+        if (pinned) {
+            log.info(`Using pinned client version ${pinned}`);
+            return pinned;
         }
+
         try {
             const response = await axios.get(`${releasesApi}/xclient/releases/latest`);
-            return String(response.data.tag_name ?? '').replace(/^v/, '');
+            const published = String(response.data.tag_name ?? '').replace(/^v/, '');
+            if (published) {
+                return published;
+            }
         } catch (error) {
             log.error(`Error fetching client version: ${error}`);
-            return { error: error.message };
         }
+
+        const localVersion = newestInstalledClientVersion();
+        if (localVersion) {
+            log.info(`Falling back to the newest installed client, ${localVersion}`);
+            return localVersion;
+        }
+        return { error: 'Could not determine the client version.' };
     });
 
     function newestInstalledClientVersion() {
