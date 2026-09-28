@@ -1,6 +1,6 @@
 {
   "name": "projectx-launcher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Launcher for the projectx client",
   "main": "main.js",
   "scripts": {
@@ -117,6 +117,7 @@
       "provider": "github",
       "owner": "iEasyScript",
       "repo": "xclient-launcher"
-    }
+    },
+    "artifactName": "Project-X-Launcher-Setup-${version}.${ext}"
   }
 }

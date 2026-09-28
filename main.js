@@ -130,8 +130,45 @@ async function createWindow() {
     await mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
+/*
+ * Updating the launcher.
+ *
+ * Three things were missing, and together they produced an update that appeared
+ * to start and then silently did nothing: no logger, so electron-updater wrote
+ * its side of the story nowhere; no error handler, so any failure was swallowed
+ * whole and the user was left looking at a "Downloading..." box forever; and
+ * differential downloads left on, which need the *installed* version's blockmap
+ * to compute a delta. 1.0.0 was published without one, so there was nothing to
+ * diff against and the download died before it began.
+ */
+autoUpdater.logger = log;
 autoUpdater.autoDownload = false;
 autoUpdater.disableWebInstaller = true;
+
+// Fetch the whole installer rather than a delta. It is the difference between
+// a hundred megabytes and a failed update, and it does not depend on what some
+// earlier release happened to publish alongside itself.
+autoUpdater.disableDifferentialDownload = true;
+
+autoUpdater.on('error', (error) => {
+    log.error('Launcher update failed:', error);
+    dialog.showMessageBox({
+        type: 'error',
+        title: 'Update failed',
+        message: 'The launcher could not update itself.',
+        detail:
+            `${error?.message || error}\n\n` +
+            'You can carry on using this version, or download the latest one from ' +
+            'https://xclient.dev/download'
+    });
+});
+
+autoUpdater.on('download-progress', (progress) => {
+    log.info(
+        `Update download ${Math.round(progress.percent)}% ` +
+        `(${Math.round(progress.transferred / 1e6)}MB of ${Math.round(progress.total / 1e6)}MB)`
+    );
+});
 
 autoUpdater.on('update-available', (info) => {
     dialog
@@ -150,9 +187,16 @@ autoUpdater.on('update-available', (info) => {
                 dialog.showMessageBox({
                     type: 'info',
                     title: 'Downloading',
-                    message: `Downloading version ${info.version} of the launcher...`
+                    message: `Downloading version ${info.version} of the launcher...`,
+                    detail:
+                        'This takes a minute or two. The launcher will tell you when it ' +
+                        'is ready to restart, and you can keep using it until then.'
                 });
-                autoUpdater.downloadUpdate();
+                autoUpdater.downloadUpdate().catch((error) => {
+                    // downloadUpdate rejects as well as emitting 'error'; without
+                    // this the rejection is unhandled and nothing says why.
+                    log.error('Launcher update download failed:', error);
+                });
             }
         });
 });
