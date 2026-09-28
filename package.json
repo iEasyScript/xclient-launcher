@@ -1,6 +1,6 @@
 {
   "name": "projectx-launcher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Launcher for the projectx client",
   "main": "main.js",
   "scripts": {
