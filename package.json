@@ -12,8 +12,8 @@
     "test:coverage": "jest --coverage",
     "release": "electron-builder --publish always",
     "win": "electron-builder --win --publish never",
-    "linux": "electron-builder --linux",
-    "mac": "electron-builder --mac"
+    "linux": "electron-builder --linux --publish never",
+    "mac": "electron-builder --mac --publish never"
   },
   "author": "Mocrosoft",
   "license": "ISC",

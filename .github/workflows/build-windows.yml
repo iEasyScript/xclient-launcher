@@ -20,7 +20,10 @@ jobs:
 
             - run: npm ci
             - run: npm test
-            - run: npm run release
+            # Build only. The release job publishes, from the artifacts every
+            # platform uploads; electron-builder publishing from inside each
+            # build needs a token it is not given, and would race the other two.
+            - run: npm run win
 
             - name: Get version from package.json
               id: version
