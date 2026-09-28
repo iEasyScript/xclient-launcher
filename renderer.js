@@ -110,6 +110,8 @@ function updateSessionEmail(email) {
         sessionContainer.classList.add('hidden');
         emailLabel.textContent = '';
     } else {
+        // Mock auth is the only mode that has a password to change.
+        toggleClass($('change-password-btn'), 'hidden', false);
         emailLabel.textContent = currentSessionEmail;
         sessionContainer.classList.remove('hidden');
     }
@@ -180,7 +182,12 @@ async function handleSignUp(event) {
 }
 
 async function handleSignOut() {
-    if (!mockAuthEnabled) return;
+    /*
+     * No early return on the auth mode here. There used to be one, guarding for
+     * mock auth, which meant Sign Out did nothing at all in the normal case --
+     * it bailed before the Discord branch, and that branch was unreachable
+     * anyway because it tests the same condition that had already returned.
+     */
     const button = $('signout-btn');
     setButtonLoading(button, true, 'Signing Out...');
 
@@ -309,6 +316,9 @@ function updateProjectXIdentity(user) {
         }
         return;
     }
+
+    // Signing in through Discord means there is no password here to change.
+    toggleClass($('change-password-btn'), 'hidden', true);
 
     // The role is worth showing: it is why Developer Tools appears in the client.
     const name = projectxUser.name || projectxUser.discordUsername || 'Signed in';
