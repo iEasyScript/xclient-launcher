@@ -130,7 +130,8 @@ describe('jar-executor.js integration', () => {
 
             expect(config.cliMemory).toEqual({
                 args: ['-Xms3g', '-Xmx3g'],
-                normalized: '3g'
+                normalized: '3g',
+                mb: 3072
             });
 
             const selectMemoryArgs = createSelectMemoryArgs({

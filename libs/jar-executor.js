@@ -14,7 +14,8 @@ module.exports = async function (deps) {
     const defaultMemoryConfig =
         cliMemory ?? {
             args: [`-Xms${DEFAULT_XMS_VALUE}`, `-Xmx${DEFAULT_XMX_VALUE}`],
-            normalized: DEFAULT_CLIENT_RAM
+            normalized: DEFAULT_CLIENT_RAM,
+            mb: normalizeRamValue(DEFAULT_XMX_VALUE)?.mb ?? null
         };
     const defaultMemorySource = cliMemory
         ? `CLI --ram (${cliMemory.normalized})`
@@ -38,12 +39,14 @@ module.exports = async function (deps) {
         if (override) {
             return {
                 args: override.args,
+                heapMb: override.mb,
                 source: `client preference (${override.normalized})`
             };
         }
 
         return {
             args: [...defaultMemoryConfig.args],
+            heapMb: defaultMemoryConfig.mb,
             source: defaultMemorySource
         };
     }
@@ -57,7 +60,12 @@ module.exports = async function (deps) {
                 log.info(
                     `Launching client with ${memoryConfig.source} memory settings: ${memoryConfig.args.join(' ')}`
                 );
-                const commandArgs = [...memoryConfig.args, ...GC_FLAGS, '-jar', jarPath];
+                const commandArgs = [
+                    ...memoryConfig.args,
+                    ...gcFlagsForHeap(memoryConfig.heapMb),
+                    '-jar',
+                    jarPath
+                ];
 
                 // apply proxy args (done differently depending on client version)
                 const err = addProxyArgs(commandArgs, proxy);
@@ -98,7 +106,7 @@ module.exports = async function (deps) {
             );
             const commandArgs = [
                 ...memoryConfig.args,
-                ...GC_FLAGS,
+                ...gcFlagsForHeap(memoryConfig.heapMb),
                 '-jar',
                 jarPath,
                 '-clean-jagex-launcher'
@@ -410,9 +418,16 @@ const DEFAULT_CLIENT_RAM = DEFAULT_XMX_VALUE;
  *   unused pages to the OS, so Task Manager reflects actual usage rather
  *   than the worst-case watermark.
  *
- * -XX:SoftMaxHeapSize=500m
- *   ZGC targets staying under 500 MB before expanding toward Xmx.
- *   Acts as a soft pressure valve — heap grows to 600m only under real load.
+ * -XX:SoftMaxHeapSize
+ *   ZGC targets staying under this before expanding toward Xmx. Acts as a soft
+ *   pressure valve: the heap grows past it only under real load.
+ *
+ *   Derived from the heap rather than fixed. It was a hardcoded 500m, which the
+ *   JVM refuses outright when it exceeds the maximum heap -- picking 256 MB in
+ *   the launcher produced "SoftMaxHeapSize must be less than or equal to the
+ *   maximum heap size" and the client simply would not start. A ceiling above
+ *   the ceiling it is bounding is never meaningful, so it is now whichever is
+ *   smaller.
  *
  * -XX:+ZUncommit
  *   Enables ZGC's page uncommit feature. Without this flag ZGC still uses
@@ -437,15 +452,25 @@ const DEFAULT_CLIENT_RAM = DEFAULT_XMX_VALUE;
  *   recognise ZGC flags — the client starts normally, just without the GC
  *   optimisations.
  */
+const { softMaxHeapMb } = require('./memory-utils');
+
 const GC_FLAGS = [
     '-XX:+UseZGC',
-    '-XX:SoftMaxHeapSize=500m',
     '-XX:+ZUncommit',
     '-XX:ZUncommitDelay=30',
     '-XX:+UseStringDedup',
     '-Xss512k',
     '-XX:+IgnoreUnrecognizedVMOptions',
 ];
+
+/**
+ * The GC flags for a given heap, including a soft maximum that fits inside it.
+ *
+ * @param {number|null} heapMb the -Xmx being used, in MB, or null if unknown
+ */
+function gcFlagsForHeap(heapMb) {
+    return [`-XX:SoftMaxHeapSize=${softMaxHeapMb(heapMb)}m`, ...GC_FLAGS];
+}
 
 function buildMemoryArgsFromRam(ramValue, log, contextLabel) {
     if (!ramValue || typeof ramValue !== 'string') {
@@ -464,7 +489,8 @@ function buildMemoryArgsFromRam(ramValue, log, contextLabel) {
 
     return {
         args: [`-Xms${parsed.normalized}`, `-Xmx${parsed.normalized}`],
-        normalized: parsed.normalized
+        normalized: parsed.normalized,
+        mb: parsed.mb
     };
 }
 

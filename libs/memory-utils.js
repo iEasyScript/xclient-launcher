@@ -52,7 +52,8 @@ function buildMemoryArgsFromRam(ramValue, log, contextLabel) {
 
     return {
         args: [`-Xms${parsed.normalized}`, `-Xmx${parsed.normalized}`],
-        normalized: parsed.normalized
+        normalized: parsed.normalized,
+        mb: parsed.mb
     };
 }
 
@@ -142,6 +143,25 @@ function createDefaultMemoryConfig(argv, log) {
     };
 }
 
+/** What ZGC aims to stay under, when the heap leaves room for it. */
+const SOFT_MAX_HEAP_MB = 500;
+
+/**
+ * The ZGC soft maximum for a given heap, in MB.
+ *
+ * Never larger than the heap it is bounding. The JVM refuses to start when
+ * SoftMaxHeapSize exceeds -Xmx, which is what made the 256 MB option fail with
+ * "SoftMaxHeapSize must be less than or equal to the maximum heap size"; and a
+ * ceiling above the ceiling means nothing anyway.
+ *
+ * @param {number|null} heapMb the -Xmx in MB, or null when it is not known
+ */
+function softMaxHeapMb(heapMb) {
+    return Number.isFinite(heapMb) && heapMb > 0
+        ? Math.min(SOFT_MAX_HEAP_MB, heapMb)
+        : SOFT_MAX_HEAP_MB;
+}
+
 module.exports = {
     normalizeRamValue,
     buildMemoryArgsFromRam,
@@ -150,5 +170,7 @@ module.exports = {
     createDefaultMemoryConfig,
     DEFAULT_XMS_VALUE,
     DEFAULT_XMX_VALUE,
-    DEFAULT_CLIENT_RAM
+    DEFAULT_CLIENT_RAM,
+    softMaxHeapMb,
+    SOFT_MAX_HEAP_MB
 };

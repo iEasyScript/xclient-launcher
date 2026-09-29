@@ -6,7 +6,8 @@ const {
     createDefaultMemoryConfig,
     DEFAULT_XMS_VALUE,
     DEFAULT_XMX_VALUE,
-    DEFAULT_CLIENT_RAM
+    DEFAULT_CLIENT_RAM,
+    softMaxHeapMb
 } = require('../libs/memory-utils');
 
 describe('Memory Utils', () => {
@@ -87,7 +88,8 @@ describe('Memory Utils', () => {
             const result = buildMemoryArgsFromRam('1g', mockLog, 'test');
             expect(result).toEqual({
                 args: ['-Xms1g', '-Xmx1g'],
-                normalized: '1g'
+                normalized: '1g',
+                mb: 1024
             });
         });
 
@@ -110,7 +112,8 @@ describe('Memory Utils', () => {
             const result = buildMemoryArgsFromRam('512m', null, 'test');
             expect(result).toEqual({
                 args: ['-Xms512m', '-Xmx512m'],
-                normalized: '512m'
+                normalized: '512m',
+                mb: 512
             });
         });
     });
@@ -162,11 +165,13 @@ describe('Memory Utils', () => {
 
             expect(config.cliMemory).toEqual({
                 args: ['-Xms2g', '-Xmx2g'],
-                normalized: '2g'
+                normalized: '2g',
+                mb: 2048
             });
             expect(config.defaultMemoryConfig).toEqual({
                 args: ['-Xms2g', '-Xmx2g'],
-                normalized: '2g'
+                normalized: '2g',
+                mb: 2048
             });
             expect(config.defaultMemorySource).toBe('CLI --ram (2g)');
         });
@@ -326,6 +331,36 @@ describe('Memory Utils', () => {
                     source: `launcher default (${DEFAULT_CLIENT_RAM})`
                 });
             });
+        });
+    });
+
+    describe('softMaxHeapMb', () => {
+        // The JVM refuses to start when SoftMaxHeapSize exceeds -Xmx, which is
+        // what made the 256 MB option fail outright.
+        test.each([
+            ['256m', 256],
+            ['512m', 512],
+            ['1g', 1024],
+            ['2g', 2048],
+            ['4g', 4096],
+            ['6g', 6144],
+            ['8g', 8192]
+        ])('never exceeds the heap for %s', (_label, heapMb) => {
+            expect(softMaxHeapMb(heapMb)).toBeLessThanOrEqual(heapMb);
+        });
+
+        test('uses the full soft maximum when the heap leaves room', () => {
+            expect(softMaxHeapMb(1024)).toBe(500);
+        });
+
+        test('shrinks to the heap when the heap is smaller', () => {
+            expect(softMaxHeapMb(256)).toBe(256);
+        });
+
+        test('falls back to the soft maximum when the heap is unknown', () => {
+            expect(softMaxHeapMb(null)).toBe(500);
+            expect(softMaxHeapMb(undefined)).toBe(500);
+            expect(softMaxHeapMb(0)).toBe(500);
         });
     });
 });
