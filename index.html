@@ -203,6 +203,36 @@
                     <button id="logout" class="logout-button loadingButton">Remove All</button>
                 </div>
 
+                <!-- Launching several accounts. Deliberately separate from the single-account
+                     dropdown above so the ordinary one-account path is unchanged. -->
+                <div id="multi-launch" class="multi-launch">
+                    <button id="multi-launch-toggle" class="multi-launch-toggle" type="button"
+                        aria-expanded="false" aria-controls="multi-launch-panel">
+                        Launch several accounts <span class="multi-caret" aria-hidden="true">▸</span>
+                    </button>
+                    <div id="multi-launch-panel" class="multi-launch-panel hidden">
+                        <div class="multi-launch-head">
+                            <button id="multi-select-all" class="multi-mini" type="button">All</button>
+                            <button id="multi-select-none" class="multi-mini" type="button">None</button>
+                        </div>
+                        <div id="multi-account-list" class="multi-account-list" role="group"
+                            aria-label="Accounts to launch"></div>
+                        <label for="multi-stagger">Gap between launches</label>
+                        <select id="multi-stagger">
+                            <option value="15">15 seconds</option>
+                            <option value="25" selected>25 seconds</option>
+                            <option value="40">40 seconds</option>
+                            <option value="60">60 seconds</option>
+                        </select>
+                        <p class="multi-hint">Each client needs a moment to read its login before
+                            the next one starts.</p>
+                        <button id="multi-launch-start" class="play-button loadingButton primary" disabled>
+                            Play Selected (0)
+                        </button>
+                        <p id="multi-launch-status" class="multi-status" aria-live="polite"></p>
+                    </div>
+                </div>
+
                 <div class="game-info">
                     <label for="client">Version</label>
                     <select id="client"></select>

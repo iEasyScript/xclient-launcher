@@ -1442,3 +1442,115 @@ option {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--gold-dim);
 }
+
+/* ===================== Launching several accounts ===================== */
+
+.multi-launch {
+    margin-top: 10px;
+}
+
+.multi-launch-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    background: var(--stone);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.multi-launch-toggle:hover {
+    color: var(--text);
+    border-color: rgba(200, 160, 74, 0.35);
+}
+
+.multi-launch-toggle[aria-expanded='true'] .multi-caret {
+    transform: rotate(90deg);
+}
+
+.multi-caret {
+    transition: transform 0.15s ease;
+    display: inline-block;
+}
+
+.multi-launch-panel {
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--stone);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius);
+}
+
+.multi-launch-panel.hidden {
+    display: none;
+}
+
+.multi-launch-head {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.multi-mini {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--stone-hi);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.multi-mini:hover {
+    color: var(--text);
+}
+
+/* Capped so a long account list scrolls instead of pushing the launch button
+   off the bottom of a sidebar that is already tall. */
+.multi-account-list {
+    max-height: 168px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.multi-account-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 4px;
+    font-size: 12.5px;
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.multi-account-row:hover {
+    background: var(--stone-hi);
+}
+
+.multi-account-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.multi-empty,
+.multi-hint {
+    margin: 4px 0 8px;
+    font-size: 11px;
+    color: var(--text-faint);
+    line-height: 1.35;
+}
+
+.multi-status {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    color: var(--gold-hi);
+    min-height: 1em;
+}

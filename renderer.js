@@ -899,6 +899,10 @@ function populateAccountSelector(characters = [], selectedAccount = null) {
 }
 
 function renderAccountsList() {
+    // Keep the multi-launch ticks in step with the account list, so adding or removing an
+    // account is reflected in both places rather than only in the one being looked at.
+    if (typeof renderMultiAccountList === 'function') renderMultiAccountList();
+
     const listContainer = document.getElementById(
         'accounts-dropdown-container'
     );
@@ -1721,6 +1725,7 @@ async function initUI(properties) {
     await setupProxyInput();
 
     setupRefreshAccountsButton();
+    setupMultiLaunch();
 }
 
 /**
@@ -2138,4 +2143,180 @@ function formatRamLabel(value) {
     const [, amount, unit] = match;
     const unitLabel = unit.toLowerCase() === 'g' ? 'GB' : 'MB';
     return `${amount} ${unitLabel}`;
+}
+
+/* ============================ Launching several accounts ============================
+ *
+ * The single-account path above is untouched. This adds a second one that walks a list.
+ *
+ * It launches in sequence rather than all at once, and that is not politeness about CPU.
+ * The Jagex session is handed to a client through credentials.properties, one file in the
+ * home directory shared by every client on the machine, so starting a second account means
+ * overwriting what the first was given. A client that has not yet read its own copy would
+ * log in as somebody else. The launcher now also passes the session as per-process
+ * environment variables, which a later launch cannot touch, but the file is still written
+ * for clients that read it -- so the gap between launches stays, and is the user's to set.
+ */
+
+/** Account ids ticked in the multi-launch panel. */
+const multiLaunchSelection = new Set();
+/** True while a sequence is running, so it cannot be started twice. */
+let multiLaunchInFlight = false;
+
+function multiLaunchStatus(message) {
+    const el = document.getElementById('multi-launch-status');
+    if (el) el.textContent = message ?? '';
+}
+
+function updateMultiLaunchButton() {
+    const button = document.getElementById('multi-launch-start');
+    if (!button) return;
+    const count = multiLaunchSelection.size;
+    button.textContent = `Play Selected (${count})`;
+    button.disabled = count === 0 || multiLaunchInFlight;
+}
+
+/** Rebuilds the tick list from `accounts`, keeping any selection that still exists. */
+function renderMultiAccountList() {
+    const list = document.getElementById('multi-account-list');
+    if (!list) return;
+
+    const known = new Set((accounts ?? []).map((a) => a.accountId));
+    for (const id of [...multiLaunchSelection]) {
+        if (!known.has(id)) multiLaunchSelection.delete(id);
+    }
+
+    list.innerHTML = '';
+    if (!accounts || accounts.length === 0) {
+        list.innerHTML = '<p class="multi-empty">No Jagex accounts added yet.</p>';
+        updateMultiLaunchButton();
+        return;
+    }
+
+    for (const account of accounts) {
+        const row = document.createElement('label');
+        row.className = 'multi-account-row';
+
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.value = account.accountId;
+        box.checked = multiLaunchSelection.has(account.accountId);
+        box.addEventListener('change', () => {
+            if (box.checked) multiLaunchSelection.add(account.accountId);
+            else multiLaunchSelection.delete(account.accountId);
+            updateMultiLaunchButton();
+        });
+
+        const name = document.createElement('span');
+        name.className = 'multi-account-name';
+        name.textContent = account.displayName || account.accountId;
+
+        row.append(box, name);
+        list.appendChild(row);
+    }
+    updateMultiLaunchButton();
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Launches each ticked account in turn.
+ *
+ * Resolves the version once up front: downloading the client inside the loop would make the
+ * first gap mean something different from the rest, and a failure there should stop the whole
+ * run rather than the account it happened on.
+ */
+async function startMultiLaunch() {
+    if (multiLaunchInFlight) return;
+
+    const chosen = (accounts ?? []).filter((a) => multiLaunchSelection.has(a.accountId));
+    if (chosen.length === 0) return;
+
+    const clientValue = document.getElementById('client')?.value;
+    if (!clientValue || !clientValue.includes('projectx-')) {
+        window.electron.errorAlert('Please select a valid client version');
+        return;
+    }
+    const version = extractVersion(clientValue);
+
+    multiLaunchInFlight = true;
+    updateMultiLaunchButton();
+
+    try {
+        const ready = await downloadClientIfNotExist(version);
+        if (!ready.exists) return;
+
+        const proxy = getProxyValues();
+        const ramPreference = getClientRamPreference();
+        const gapSeconds = Number(document.getElementById('multi-stagger')?.value ?? 25);
+
+        const ttl = await window.electron.updateClientJarTTL(version);
+        if (ttl?.error) window.electron.logError(ttl.error);
+
+        let started = 0;
+        for (const [index, account] of chosen.entries()) {
+            const name = account.displayName || account.accountId;
+            multiLaunchStatus(`Starting ${name} (${index + 1} of ${chosen.length})…`);
+
+            try {
+                await window.electron.overwriteCredentialProperties(account);
+                const result = await window.electron.openClient(
+                    version,
+                    proxy,
+                    account,
+                    ramPreference
+                );
+                if (result?.error) {
+                    // One account failing is not a reason to abandon the others.
+                    window.electron.logError(`${name}: ${result.error}`);
+                    multiLaunchStatus(`${name} failed to start: ${result.error}`);
+                } else {
+                    started++;
+                }
+            } catch (err) {
+                window.electron.logError(`${name}: ${err?.message || String(err)}`);
+            }
+
+            const isLast = index === chosen.length - 1;
+            if (!isLast) {
+                for (let left = gapSeconds; left > 0; left--) {
+                    multiLaunchStatus(`Next account in ${left}s…`);
+                    await wait(1000);
+                }
+            }
+        }
+
+        multiLaunchStatus(
+            started === chosen.length
+                ? `Started ${started} of ${chosen.length}.`
+                : `Started ${started} of ${chosen.length} — see the launcher log for the rest.`
+        );
+    } finally {
+        multiLaunchInFlight = false;
+        updateMultiLaunchButton();
+    }
+}
+
+function setupMultiLaunch() {
+    const toggle = document.getElementById('multi-launch-toggle');
+    const panel = document.getElementById('multi-launch-panel');
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', () => {
+        const open = panel.classList.toggle('hidden') === false;
+        toggle.setAttribute('aria-expanded', String(open));
+        if (open) renderMultiAccountList();
+    });
+
+    document.getElementById('multi-select-all')?.addEventListener('click', () => {
+        for (const account of accounts ?? []) multiLaunchSelection.add(account.accountId);
+        renderMultiAccountList();
+    });
+    document.getElementById('multi-select-none')?.addEventListener('click', () => {
+        multiLaunchSelection.clear();
+        renderMultiAccountList();
+    });
+    document.getElementById('multi-launch-start')?.addEventListener('click', startMultiLaunch);
+
+    renderMultiAccountList();
 }

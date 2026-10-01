@@ -87,7 +87,7 @@ module.exports = async function (deps) {
                     );
                 }
 
-                checkJavaAndRunJar(commandArgs, dialog, shell);
+                checkJavaAndRunJar(commandArgs, dialog, shell, jagexEnvFor(account));
                 return { success: true };
             } catch (error) {
                 log.error(error.message);
@@ -214,6 +214,24 @@ module.exports = async function (deps) {
      * @param {Object} proxy - The proxy configuration object.
      * @returns {Error|null} - Returns an error if the proxy configuration is invalid, otherwise null.
      */
+    /**
+     * This account's Jagex session, as environment variables for one client.
+     *
+     * The same values the launcher writes into credentials.properties, which is
+     * a single file shared by every client on the machine. Launching several
+     * accounts means writing it once per account, and a client that has not yet
+     * read its own copy would pick up the next account's. These travel with the
+     * process instead, so nothing a later launch does can change them.
+     */
+    function jagexEnvFor(account) {
+        if (!account || !account.accountId || !account.sessionId) return undefined;
+        return {
+            JX_CHARACTER_ID: String(account.accountId),
+            JX_SESSION_ID: String(account.sessionId),
+            JX_DISPLAY_NAME: String(account.displayName ?? '')
+        };
+    }
+
     function addProxyArgs(commandArgs, proxy) {
         if (!proxy || !proxy.proxyIp) return null;
         if (typeof proxy.proxyIp !== 'string') return null;
@@ -280,7 +298,16 @@ module.exports = async function (deps) {
         });
     }
 
-    function executeJar(commandArgs, dialog) {
+    /**
+     * @param extraEnv  Variables added to this client's environment only.
+     *                  Jagex credentials go here when several clients are
+     *                  started together: credentials.properties is a single
+     *                  file in the home directory, so the launcher writing the
+     *                  next account's session into it can land before the
+     *                  previous client has read its own. Per-process variables
+     *                  cannot be overwritten by a later launch.
+     */
+    function executeJar(commandArgs, dialog, extraEnv) {
         log.info(`java ${redactCommandArgs(commandArgs).join(' ')}`);
 
         /**
@@ -301,9 +328,9 @@ module.exports = async function (deps) {
          * for their account.
          */
         const accountToken = currentAccountToken();
-        const childEnv = accountToken
-            ? { ...process.env, PROJECTX_ACCOUNT_TOKEN: accountToken }
-            : process.env;
+        const childEnv = { ...process.env };
+        if (accountToken) childEnv.PROJECTX_ACCOUNT_TOKEN = accountToken;
+        if (extraEnv) Object.assign(childEnv, extraEnv);
         if (accountToken) {
             log.info('Launching client signed in to Project X');
         }
@@ -366,13 +393,13 @@ module.exports = async function (deps) {
         }
     }
 
-    function checkJavaAndRunJar(commandArgs, dialog, shell) {
+    function checkJavaAndRunJar(commandArgs, dialog, shell, extraEnv) {
         log.info(`java ${redactCommandArgs(commandArgs).join(' ')}`);
 
         isJavaInstalled((isInstalled, error) => {
             if (isInstalled) {
                 log.info('Java is installed, running the JAR...');
-                executeJar(commandArgs, dialog);
+                executeJar(commandArgs, dialog, extraEnv);
             } else {
                 dialog
                     .showMessageBox({
