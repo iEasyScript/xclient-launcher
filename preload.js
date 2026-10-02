@@ -98,10 +98,9 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.invoke('auth:changepw', payload),
         status: () => ipcRenderer.invoke('auth:status')
     },
-    ipcRenderer: {
-        send: (channel, data) => ipcRenderer.send(channel, data),
-        receive: (channel, func) =>
-            ipcRenderer.on(channel, (event, ...args) => func(event, ...args)),
-        invoke: (channel, data) => ipcRenderer.invoke(channel, data)
-    }
+    // Download progress pushed by the main process. Only named channels are
+    // exposed: a generic send/invoke would let any script in this window call
+    // every handler, read-accounts included.
+    onProgress: (callback) =>
+        ipcRenderer.on('progress', (_event, payload) => callback(payload))
 });

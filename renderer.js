@@ -508,7 +508,7 @@ async function openClient() {
     }
 }
 
-window.electron.ipcRenderer.receive('progress', (event, data) => {
+window.electron.onProgress((data) => {
     if (data) {
         updateProgress(data.percent, data.status);
     }

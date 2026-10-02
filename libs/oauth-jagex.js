@@ -190,12 +190,12 @@ async function getToken(code) {
             }
         );
         log.info('Token exchange successful.');
-        log.info(`ID Token: ${response.data.id_token}`);
         // Return the ID token
         return response.data.id_token;
     } catch (error) {
+        // The status only: a Jagex error body can echo the code or token back.
         log.error(
-            `Error getting token: ${error.response ? error.response.data : error.message
+            `Error getting token: ${error.response ? `HTTP ${error.response.status}` : error.message
             }`
         );
         return null;
@@ -218,8 +218,9 @@ async function getSessionId(idToken) {
         log.info('Session ID fetched successfully.');
         return response.data.sessionId;
     } catch (error) {
+        // The status only: a Jagex error body can echo the code or token back.
         log.error(
-            `Error getting session ID: ${error.response ? error.response.data : error.message
+            `Error getting session ID: ${error.response ? `HTTP ${error.response.status}` : error.message
             }`
         );
         return null;
