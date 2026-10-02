@@ -810,6 +810,13 @@ async function initializeLauncher() {
 
     await handleJagexAccountLogic(properties);
 
+    // Pick up renamed characters without waiting for a click on Refresh. Quiet
+    // on failure (offline, expired session); the watcher above redraws the
+    // list if accounts.json changes.
+    if (accounts.length > 0) {
+        window.electron.refreshAccounts().catch(() => {});
+    }
+
     document.querySelectorAll('.loadingButton').forEach((button) => {
         button.addEventListener('click', startLoading);
     });

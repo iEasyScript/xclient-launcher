@@ -101,4 +101,33 @@ describe('refresh-accounts IPC handler', () => {
         const result = await handler();
         expect(result.error).toMatch(/does not exist/);
     });
+
+    test('refresh-accounts refreshes every session, not only the first', async () => {
+        const accountsFile = path.join(testTempDir, 'accounts.json');
+        fs.writeFileSync(
+            accountsFile,
+            JSON.stringify([
+                { accountId: 'acc1', displayName: 'A', sessionId: 'SESSION1' },
+                { accountId: 'acc2', displayName: 'B', sessionId: 'SESSION2' },
+                { accountId: 'acc3', displayName: 'C', sessionId: 'SESSION1' }
+            ])
+        );
+        writeAccountsToFile.mockResolvedValue(true);
+
+        const result = await registeredHandlers['refresh-accounts']();
+
+        expect(result.success).toBe(true);
+        expect(writeAccountsToFile.mock.calls.map((c) => c[0]).sort()).toEqual([
+            'SESSION1',
+            'SESSION2'
+        ]);
+    });
+
+    test('refresh-accounts says so when no session could be refreshed', async () => {
+        writeAccountsToFile.mockResolvedValue(false);
+
+        const result = await registeredHandlers['refresh-accounts']();
+
+        expect(result.error).toMatch(/sign in again/);
+    });
 });

@@ -228,6 +228,49 @@ async function getSessionId(idToken) {
 }
 
 /**
+ * Merges what Jagex reports for a session into the saved accounts. Characters
+ * already saved are updated in place, so a rename reaches the launcher; what the
+ * launcher added itself (profile, createdOn) is kept, and everything is keyed by
+ * accountId, which a rename does not change.
+ * @param {object[]} existingAccounts The accounts in accounts.json.
+ * @param {object[]} fetchedAccounts The accounts Jagex returned for the session.
+ * @param {string} sessionId The session they were fetched with.
+ * @returns {{accounts: object[], added: number, updated: number}}
+ */
+function mergeAccounts(existingAccounts, fetchedAccounts, sessionId) {
+    const fetchedById = new Map(
+        fetchedAccounts.map((acc) => [acc.accountId, { ...acc, sessionId }])
+    );
+
+    let updated = 0;
+    const accounts = existingAccounts.map((saved) => {
+        const fresh = fetchedById.get(saved.accountId);
+        if (!fresh) {
+            return saved;
+        }
+        fetchedById.delete(saved.accountId);
+        const merged = { ...saved, ...fresh };
+        // By value: some fields (membership) are objects
+        if (
+            Object.keys(fresh).some(
+                (key) =>
+                    JSON.stringify(saved[key]) !== JSON.stringify(fresh[key])
+            )
+        ) {
+            updated++;
+        }
+        return merged;
+    });
+
+    const createdOn = new Date().toISOString();
+    for (const acc of fetchedById.values()) {
+        accounts.push({ ...acc, createdOn });
+    }
+
+    return { accounts, added: fetchedById.size, updated };
+}
+
+/**
  * Fetches account details and writes them to a JSON file.
  * @param {string} sessionId The game session ID.
  */
@@ -241,12 +284,6 @@ async function writeAccountsToFile(sessionId) {
             }
         );
 
-        const newAccounts = response.data.map((acc) => ({
-            ...acc,
-            sessionId,
-            createdOn: new Date().toISOString()
-        }));
-
         await fs.mkdir(ACCOUNTS_DIR, { recursive: true });
 
         let existingAccounts = [];
@@ -259,30 +296,29 @@ async function writeAccountsToFile(sessionId) {
             }
         }
 
-        const existingAccountIds = new Set(
-            existingAccounts.map((acc) => acc.accountId)
-        );
-        const nonDuplicateNewAccounts = newAccounts.filter(
-            (acc) => !existingAccountIds.has(acc.accountId)
+        const { accounts, added, updated } = mergeAccounts(
+            existingAccounts,
+            response.data,
+            sessionId
         );
 
-        if (nonDuplicateNewAccounts.length > 0) {
-            const allAccounts = [
-                ...existingAccounts,
-                ...nonDuplicateNewAccounts
-            ];
+        if (added > 0 || updated > 0) {
             await fs.writeFile(
                 ACCOUNTS_FILE_PATH,
-                JSON.stringify(allAccounts, null, 2)
+                JSON.stringify(accounts, null, 2)
             );
             log.info(
-                `Successfully wrote ${nonDuplicateNewAccounts.length} new account(s) to ${ACCOUNTS_FILE_PATH}`
+                `Accounts refreshed: ${added} added, ${updated} updated.`
             );
         } else {
-            log.info('No new accounts to add.');
+            log.info('Accounts already up to date.');
         }
+        return true;
     } catch (error) {
-        log.error(`Error writing accounts to file: ${error.message}`);
+        log.error(
+            `Error writing accounts to file: ${error.response ? `HTTP ${error.response.status}` : error.message}`
+        );
+        return false;
     }
 }
 
@@ -417,4 +453,4 @@ async function startAuthFlow() {
     });
 }
 
-module.exports = { startAuthFlow, writeAccountsToFile };
+module.exports = { startAuthFlow, writeAccountsToFile, mergeAccounts };

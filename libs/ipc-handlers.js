@@ -98,14 +98,26 @@ module.exports = async function (deps) {
                 return { error: 'No accounts found to refresh' };
             }
 
-            // Use first account's sessionId (assuming all accounts share the same session scope)
-            const firstAccount = accountsData[0];
-            const sessionId = firstAccount && firstAccount.sessionId;
-            if (!sessionId) {
+            // Each Jagex login added has its own session, and a session only
+            // lists its own characters, so refresh every one of them.
+            const sessionIds = [
+                ...new Set(accountsData.map((acc) => acc.sessionId).filter(Boolean))
+            ];
+            if (sessionIds.length === 0) {
                 return { error: 'No sessionId found in accounts.json' };
             }
 
-            await writeAccountsToFile(sessionId);
+            let refreshed = 0;
+            for (const sessionId of sessionIds) {
+                if ((await writeAccountsToFile(sessionId)) !== false) {
+                    refreshed++;
+                }
+            }
+            if (refreshed === 0) {
+                return {
+                    error: 'Could not refresh your accounts from Jagex. Your sign-in may have expired: use Add Accounts to sign in again.'
+                };
+            }
 
             // Re-read accounts after refresh
             try {
