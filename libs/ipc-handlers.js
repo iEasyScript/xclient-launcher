@@ -134,6 +134,48 @@ module.exports = async function (deps) {
         }
     });
 
+    /*
+     * Deletes the client jars older than the one being kept -- or, with
+     * onlyOlder false, every other client jar.
+     *
+     * Each release used to leave its jar behind, so the version list grew by one
+     * with every update and offered clients nobody should be on. (dir-module's
+     * three-day cleanupUnusedClientsJar was meant to do this, but nothing ever
+     * calls it.) Only called once the kept version is on disk. After a download,
+     * which can be any version chosen from the list, only older ones go, so an
+     * old pick never deletes a newer jar. At start-up, keeping the published
+     * release, everything else goes, including leftovers from the old 2.x
+     * numbering that would otherwise sort above every 1.0.x release for ever. A jar that will not delete -- on Windows, one a still-running client
+     * has open -- is skipped and goes next time. Not when PROJECTX_CLIENT_VERSION
+     * pins a local build, which is for testing against particular versions.
+     */
+    function pruneOldClients(keepVersion, onlyOlder = true) {
+        if ((process.env.PROJECTX_CLIENT_VERSION || '').trim()) {
+            return;
+        }
+        if (!/^\d+(?:\.\d+)*$/.test(String(keepVersion || ''))) {
+            return;
+        }
+        let files;
+        try {
+            files = fs.readdirSync(projectxDir);
+        } catch (error) {
+            return;
+        }
+        for (const file of files) {
+            const match = /^projectx-(\d+(?:\.\d+)*)\.jar$/.exec(file);
+            if (!match || match[1] === keepVersion || (onlyOlder && compareVersions(match[1], keepVersion) > 0)) {
+                continue;
+            }
+            try {
+                fs.unlinkSync(path.join(projectxDir, file));
+                log.info(`Removed old client ${file}`);
+            } catch (error) {
+                log.warn(`Could not remove old client ${file} (in use?): ${error.message}`);
+            }
+        }
+    }
+
     ipcMain.handle('download-client', async (event, version) => {
         const url = `${releases}/${version}/projectx-${version}.jar`;
         try {
@@ -144,6 +186,7 @@ module.exports = async function (deps) {
             if (
                 fs.existsSync(path.join(projectxDir, `projectx-${version}.jar`))
             ) {
+                pruneOldClients(version);
                 return {
                     success: true,
                     path: path.join(projectxDir, `projectx-${version}.jar`)
@@ -180,6 +223,7 @@ module.exports = async function (deps) {
             });
             const filePath = path.join(projectxDir, `projectx-${version}.jar`);
             fs.writeFileSync(filePath, response.data);
+            pruneOldClients(version);
             event.sender.send('progress', {
                 percent: 100,
                 status: 'Completed!'
@@ -229,6 +273,10 @@ module.exports = async function (deps) {
             const response = await axios.get(`${releasesApi}/xclient/releases/latest`);
             const published = String(response.data.tag_name ?? '').replace(/^v/, '');
             if (published) {
+                // Already have it: the older ones can go now rather than at the next release.
+                if (fs.existsSync(path.join(projectxDir, `projectx-${published}.jar`))) {
+                    pruneOldClients(published, false);
+                }
                 return published;
             }
         } catch (error) {
@@ -257,18 +305,20 @@ module.exports = async function (deps) {
         if (versions.length === 0) {
             return null;
         }
-        const parts = (v) => v.split('.').map(Number);
-        return versions.sort((a, b) => {
-            const pa = parts(a);
-            const pb = parts(b);
-            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-                const diff = (pb[i] || 0) - (pa[i] || 0);
-                if (diff !== 0) {
-                    return diff;
-                }
+        return versions.sort((a, b) => compareVersions(b, a))[0];
+    }
+
+    /** Negative if a is older than b, positive if newer, 0 if equal: "1.0.9" < "1.0.43". */
+    function compareVersions(a, b) {
+        const pa = String(a).split('.').map(Number);
+        const pb = String(b).split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+            const diff = (pa[i] || 0) - (pb[i] || 0);
+            if (diff !== 0) {
+                return diff;
             }
-            return 0;
-        })[0];
+        }
+        return 0;
     }
 
     ipcMain.handle('client-exists', async (event, version) => {
