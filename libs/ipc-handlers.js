@@ -135,21 +135,18 @@ module.exports = async function (deps) {
     });
 
     /*
-     * Deletes the client jars older than the one being kept -- or, with
-     * onlyOlder false, every other client jar.
+     * Deletes the client jars older than one that has just finished downloading.
      *
      * Each release used to leave its jar behind, so the version list grew by one
      * with every update and offered clients nobody should be on. (dir-module's
      * three-day cleanupUnusedClientsJar was meant to do this, but nothing ever
-     * calls it.) Only called once the kept version is on disk. After a download,
-     * which can be any version chosen from the list, only older ones go, so an
-     * old pick never deletes a newer jar. At start-up, keeping the published
-     * release, everything else goes, including leftovers from the old 2.x
-     * numbering that would otherwise sort above every 1.0.x release for ever. A jar that will not delete -- on Windows, one a still-running client
+     * calls it.) Only run straight after a download completes -- never on start-up
+     * or when a version is picked from the list -- and only older versions go, so
+     * a download of an old version cannot delete a newer jar. A jar that will not delete -- on Windows, one a still-running client
      * has open -- is skipped and goes next time. Not when PROJECTX_CLIENT_VERSION
      * pins a local build, which is for testing against particular versions.
      */
-    function pruneOldClients(keepVersion, onlyOlder = true) {
+    function pruneOldClients(keepVersion) {
         if ((process.env.PROJECTX_CLIENT_VERSION || '').trim()) {
             return;
         }
@@ -164,7 +161,7 @@ module.exports = async function (deps) {
         }
         for (const file of files) {
             const match = /^projectx-(\d+(?:\.\d+)*)\.jar$/.exec(file);
-            if (!match || match[1] === keepVersion || (onlyOlder && compareVersions(match[1], keepVersion) > 0)) {
+            if (!match || compareVersions(match[1], keepVersion) >= 0) {
                 continue;
             }
             try {
@@ -186,7 +183,6 @@ module.exports = async function (deps) {
             if (
                 fs.existsSync(path.join(projectxDir, `projectx-${version}.jar`))
             ) {
-                pruneOldClients(version);
                 return {
                     success: true,
                     path: path.join(projectxDir, `projectx-${version}.jar`)
@@ -223,6 +219,7 @@ module.exports = async function (deps) {
             });
             const filePath = path.join(projectxDir, `projectx-${version}.jar`);
             fs.writeFileSync(filePath, response.data);
+            // Only now, with the new one complete on disk: the old ones go.
             pruneOldClients(version);
             event.sender.send('progress', {
                 percent: 100,
@@ -273,10 +270,6 @@ module.exports = async function (deps) {
             const response = await axios.get(`${releasesApi}/xclient/releases/latest`);
             const published = String(response.data.tag_name ?? '').replace(/^v/, '');
             if (published) {
-                // Already have it: the older ones can go now rather than at the next release.
-                if (fs.existsSync(path.join(projectxDir, `projectx-${published}.jar`))) {
-                    pruneOldClients(published, false);
-                }
                 return published;
             }
         } catch (error) {
