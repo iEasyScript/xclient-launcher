@@ -38,6 +38,9 @@ jobs:
                       ./artifacts/projectx-launcher-exe-latest/latest.yml
                       ./artifacts/projectx-launcher-exe-latest/*.blockmap
                       ./artifacts/projectx-launcher-linux-latest/*.AppImage
+                      ./artifacts/projectx-launcher-linux-latest/latest-linux.yml
                       ./artifacts/projectx-launcher-mac-latest/*.dmg
+                      ./artifacts/projectx-launcher-mac-latest/*.zip
+                      ./artifacts/projectx-launcher-mac-latest/latest-mac.yml
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

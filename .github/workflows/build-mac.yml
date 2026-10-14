@@ -37,19 +37,25 @@ jobs:
                   echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
                   echo "App version: $APP_VERSION"
 
-            - name: Find DMG file
-              id: find_dmg
+            # One universal build (Apple Silicon and Intel). The dmg is what people
+            # install; latest-mac.yml lets installed launchers see a new version
+            # (they send the user to the website for it while the app is unsigned).
+            - name: Check build output
               run: |
                   set -euo pipefail
                   echo "Dist contents:"; ls -1 dist || true
-                  DMG_PATH=$(ls -1 "dist"/*.dmg 2>/dev/null | head -n1 || true)
-                  if [ -z "$DMG_PATH" ]; then
-                    echo "::error::No DMG file found in dist/"; exit 1; fi
-                  echo "dmg_path=$DMG_PATH" >> $GITHUB_OUTPUT
-                  echo "Resolved DMG: $DMG_PATH"
+                  ls dist/*.dmg dist/*.zip dist/latest-mac.yml > /dev/null
+                  APP=$(find dist -maxdepth 2 -name "*.app" | head -n1)
+                  ARCHS=$(lipo -archs "$APP/Contents/MacOS/Project X Launcher")
+                  echo "$APP: $ARCHS"
+                  case "$ARCHS" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::not universal: $ARCHS"; exit 1;; esac
 
             - name: Upload macOS artifact
               uses: actions/upload-artifact@v4
               with:
                   name: projectx-launcher-mac-latest
-                  path: ${{ steps.find_dmg.outputs.dmg_path }}
+                  if-no-files-found: error
+                  path: |
+                      dist/*.dmg
+                      dist/*.zip
+                      dist/latest-mac.yml

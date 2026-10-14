@@ -39,8 +39,12 @@ jobs:
                   echo "Contents of dist directory:"
                   ls -la dist/ || echo "dist directory not found"
 
+            # latest-linux.yml is what lets an installed AppImage update itself.
             - name: Upload AppImage
               uses: actions/upload-artifact@v4
               with:
                   name: projectx-launcher-linux-latest
-                  path: dist/*.AppImage
+                  if-no-files-found: error
+                  path: |
+                      dist/*.AppImage
+                      dist/latest-linux.yml

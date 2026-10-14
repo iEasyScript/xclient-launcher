@@ -1,6 +1,6 @@
 {
   "name": "projectx-launcher",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Launcher for the projectx client",
   "main": "main.js",
   "scripts": {
@@ -70,7 +70,20 @@
     },
     "mac": {
       "category": "public.app-category.utilities",
-      "target": "default",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "icon": "images/projectx_transparent.icns"
     },
     "dmg": {

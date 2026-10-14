@@ -170,7 +170,35 @@ autoUpdater.on('download-progress', (progress) => {
     );
 });
 
+/*
+ * macOS will not let an app replace itself unless it is signed with an Apple
+ * developer certificate, which the launcher is not yet: an in-place update would
+ * download and then fail to install. So on a Mac a new version is a link to the
+ * website's download instead.
+ */
+const MAC_DOWNLOAD_URL = 'https://xclient.dev/download?os=mac';
+
 autoUpdater.on('update-available', (info) => {
+    if (process.platform === 'darwin') {
+        dialog
+            .showMessageBox({
+                type: 'info',
+                title: 'Update available',
+                message: `Version ${info.version} of the launcher is available.`,
+                detail:
+                    'Download it from the website, then drag it into Applications to replace this one. ' +
+                    'You may need to run the Terminal command from the install steps again.',
+                buttons: ['Download', 'Later'],
+                cancelId: 1,
+                defaultId: 0
+            })
+            .then((result) => {
+                if (result.response === 0) {
+                    shell.openExternal(MAC_DOWNLOAD_URL);
+                }
+            });
+        return;
+    }
     dialog
         .showMessageBox({
             type: 'info',
