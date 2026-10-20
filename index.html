@@ -184,6 +184,33 @@
                         <h1 class="hero-word">Project X</h1>
                         <p class="hero-tagline">Old School automation, forged your way</p>
                     </div>
+
+                    <!-- Accounts panel: progress for each saved account, from the public
+                         hiscores. Display only -- nothing in it logs in or launches.
+                         renderer.js fills the list and toggles .hidden / .collapsed. -->
+                    <section id="accounts-panel" class="accounts-panel hidden" aria-label="Your accounts">
+                        <div class="accounts-panel-head">
+                            <button id="accounts-panel-toggle" class="accounts-panel-toggle" type="button"
+                                aria-expanded="true" aria-controls="accounts-panel-body"
+                                title="Collapse or expand">
+                                <span class="accounts-panel-title">Your accounts</span>
+                                <span id="accounts-panel-count" class="accounts-dropdown-count">0</span>
+                                <span class="accounts-panel-caret" aria-hidden="true">▾</span>
+                            </button>
+                            <button id="accounts-panel-refresh" class="accounts-panel-icon" type="button"
+                                title="Check the hiscores again" aria-label="Check the hiscores again">
+                                <span aria-hidden="true">⟳</span>
+                            </button>
+                            <button id="accounts-panel-hide" class="accounts-panel-icon" type="button"
+                                title="Hide this panel (bring it back from the menu)" aria-label="Hide the accounts panel">
+                                <span aria-hidden="true">×</span>
+                            </button>
+                        </div>
+                        <div id="accounts-panel-body" class="accounts-panel-body">
+                            <ul id="accounts-panel-list" class="accounts-panel-list"></ul>
+                            <p class="accounts-panel-foot">Levels from the public OSRS hiscores, checked every 30 minutes.</p>
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -275,6 +302,9 @@
         <!-- Custom popup menu -->
         <div id="app-menu" class="app-menu hidden" aria-hidden="true">
             <ul class="menu-root">
+                <li id="menu-accounts-panel" class="menu-item" role="menuitemcheckbox" aria-checked="true">
+                    <span class="menu-label">Accounts panel <span class="menu-check" aria-hidden="true">✓</span></span>
+                </li>
                 <li class="menu-item has-sub" data-action="open-folder-root">
                     <span class="menu-label">Open <span class="menu-caret">▸</span></span>
                     <ul class="submenu">

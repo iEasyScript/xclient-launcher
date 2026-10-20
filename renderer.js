@@ -9,6 +9,8 @@ let launcherInitialized = false;
 let authUiReady = false;
 let mockAuthEnabled = false;
 let currentSessionEmail = '';
+/** Nicknames by accountId, from the launcher settings (see libs/account-nicknames.js). */
+let accountNicknames = {};
 
 function $(id) {
     return document.getElementById(id);
@@ -896,7 +898,7 @@ function populateAccountSelector(characters = [], selectedAccount = null) {
     characters.forEach((character) => {
         const option = document.createElement('option');
         option.value = character.accountId; // Set sessionId as the value
-        option.textContent = character.displayName; // Set displayName as the text
+        option.textContent = accountLabel(character); // Nickname (name), or just the name
         characterSelect.appendChild(option); // Add the option to the select element
     });
 
@@ -909,6 +911,7 @@ function renderAccountsList() {
     // Keep the multi-launch ticks in step with the account list, so adding or removing an
     // account is reflected in both places rather than only in the one being looked at.
     if (typeof renderMultiAccountList === 'function') renderMultiAccountList();
+    if (typeof renderAccountsPanel === 'function') renderAccountsPanel();
 
     const listContainer = document.getElementById(
         'accounts-dropdown-container'
@@ -956,10 +959,8 @@ function renderAccountsList() {
     const initialSelectedValue = characterSelect?.value || 'none';
     let currentSelectedValue = initialSelectedValue;
 
-    const getAccountLabel = (account) => {
-        const label = account?.displayName?.trim();
-        return label && label.length > 0 ? label : 'Not set';
-    };
+    // "Nickname (name)" when a nickname is set, so search finds either.
+    const getAccountLabel = (account) => accountLabel(account);
 
     const updateToggleLabel = (value) => {
         if (value === 'none') {
@@ -1710,6 +1711,10 @@ async function initUI(properties) {
     playJagexButton?.removeEventListener('click', playButtonClickHandler);
     playJagexButton?.addEventListener('click', playButtonClickHandler);
 
+    // Before the first render, so the pickers and the panel show nicknames.
+    await loadAccountNicknames();
+    await setupAccountsPanel();
+
     const accountsData = await safeReadAccounts();
     accounts = accountsData ?? [];
     await setupSidebarLayout(accounts.length);
@@ -2216,7 +2221,7 @@ function renderMultiAccountList() {
 
         const name = document.createElement('span');
         name.className = 'multi-account-name';
-        name.textContent = account.displayName || account.accountId;
+        name.textContent = accountLabel(account);
 
         row.append(box, name);
         list.appendChild(row);
@@ -2262,7 +2267,7 @@ async function startMultiLaunch() {
 
         let started = 0;
         for (const [index, account] of chosen.entries()) {
-            const name = account.displayName || account.accountId;
+            const name = accountLabel(account);
             multiLaunchStatus(`Starting ${name} (${index + 1} of ${chosen.length})…`);
 
             try {
@@ -2326,4 +2331,488 @@ function setupMultiLaunch() {
     document.getElementById('multi-launch-start')?.addEventListener('click', startMultiLaunch);
 
     renderMultiAccountList();
+}
+
+/* ============================ Accounts panel ============================
+ *
+ * A corner of the hero showing each saved Jagex account and how far it has
+ * got, so progress can be checked without logging in. Display only: no card,
+ * name or stat starts a client or touches the selected account. The only
+ * buttons are the nickname edit, the hiscores refresh, collapse and hide.
+ *
+ * Progress comes from the public OSRS hiscores, looked up in the main process
+ * (libs/hiscores.js) by display name alone: the session ids accounts.json
+ * holds never leave this file's `accounts` array. Lookups are queued, spaced
+ * out and cached there, so re-rendering here costs nothing.
+ *
+ * When the panel is hidden nothing is looked up at all.
+ */
+
+let accountsPanelSettings = { hidden: false, collapsed: false };
+/** Hiscores results by normalised display name, with when they arrived. */
+const hiscoreResults = new Map();
+/** Names with a lookup under way, so a re-render does not ask twice. */
+const hiscoreLookupsPending = new Set();
+/** The accountId whose nickname is being typed: a re-render would drop the input. */
+let nicknameEditing = null;
+let accountsPanelRenderTimer = null;
+/** Accounts whose "All skills" list is open, so a re-render keeps it open. */
+const accountsPanelOpenSkills = new Set();
+
+/** How long a result is shown before asking again; the main process caches too. */
+const HISCORES_RECHECK_OK_MS = 30 * 60 * 1000;
+const HISCORES_RECHECK_OTHER_MS = 2 * 60 * 1000;
+
+const SKILL_ABBREVIATIONS = {
+    Attack: 'Att',
+    Defence: 'Def',
+    Strength: 'Str',
+    Hitpoints: 'HP',
+    Ranged: 'Rng',
+    Prayer: 'Pray',
+    Magic: 'Mage',
+    Cooking: 'Cook',
+    Woodcutting: 'WC',
+    Fletching: 'Fletch',
+    Fishing: 'Fish',
+    Firemaking: 'FM',
+    Crafting: 'Craft',
+    Smithing: 'Smith',
+    Mining: 'Mine',
+    Herblore: 'Herb',
+    Agility: 'Agil',
+    Thieving: 'Thiev',
+    Slayer: 'Slay',
+    Farming: 'Farm',
+    Runecraft: 'RC',
+    Hunter: 'Hunt',
+    Construction: 'Con',
+    Sailing: 'Sail'
+};
+
+/** The account's in-game name, or '' when Jagex has none for it yet. */
+function accountName(account) {
+    const name =
+        typeof account?.displayName === 'string' ? account.displayName.trim() : '';
+    return name && name !== 'Not set' ? name : '';
+}
+
+function accountNickname(account) {
+    const id = account?.accountId;
+    return id && Object.prototype.hasOwnProperty.call(accountNicknames, id)
+        ? accountNicknames[id]
+        : '';
+}
+
+/** What the account pickers show: "WC account (Zezima)", or just "Zezima". */
+function accountLabel(account) {
+    const name = accountName(account) || 'Not set';
+    const nickname = accountNickname(account);
+    return nickname ? `${nickname} (${name})` : name;
+}
+
+/** Same rule as normalizeName in libs/hiscores.js, lower-cased. */
+function hiscoresKey(name) {
+    return name.replace(/[\u00A0_]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function makeElement(tag, className, text) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    // textContent only: names and nicknames are never parsed as HTML.
+    if (text !== undefined) element.textContent = text;
+    return element;
+}
+
+function formatNumber(value) {
+    return Number.isFinite(value) ? value.toLocaleString('en-GB') : '–';
+}
+
+function formatXp(value) {
+    if (!Number.isFinite(value)) return '–';
+    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+    if (value >= 1e3) return `${Math.round(value / 1e3)}K`;
+    return String(value);
+}
+
+function formatAge(timestamp) {
+    if (!Number.isFinite(timestamp)) return '';
+    const minutes = Math.floor((Date.now() - timestamp) / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+}
+
+async function loadAccountNicknames() {
+    try {
+        const result = await window.electron.accountsPanel?.readNicknames?.();
+        if (result?.nicknames && typeof result.nicknames === 'object') {
+            accountNicknames = result.nicknames;
+        }
+    } catch (err) {
+        window.electron.logError(`Could not read nicknames: ${err?.message || err}`);
+    }
+}
+
+function applyAccountsPanelSettings() {
+    const panel = $('accounts-panel');
+    if (!panel) return;
+    const hasAccounts = Array.isArray(accounts) && accounts.length > 0;
+    toggleClass(panel, 'hidden', accountsPanelSettings.hidden || !hasAccounts);
+    toggleClass(panel, 'collapsed', accountsPanelSettings.collapsed);
+    $('accounts-panel-toggle')?.setAttribute(
+        'aria-expanded',
+        String(!accountsPanelSettings.collapsed)
+    );
+    const menuItem = $('menu-accounts-panel');
+    if (menuItem) {
+        menuItem.setAttribute('aria-checked', String(!accountsPanelSettings.hidden));
+        toggleClass(menuItem, 'checked', !accountsPanelSettings.hidden);
+    }
+}
+
+async function saveAccountsPanelSettings(patch) {
+    const wasHidden = accountsPanelSettings.hidden;
+    accountsPanelSettings = { ...accountsPanelSettings, ...patch };
+    applyAccountsPanelSettings();
+    // Coming back from hidden: nothing was looked up while it was away.
+    if (wasHidden && !accountsPanelSettings.hidden) renderAccountsPanel();
+    try {
+        const result = await window.electron.accountsPanel.writeSettings(patch);
+        if (result?.settings) {
+            accountsPanelSettings = result.settings;
+            applyAccountsPanelSettings();
+        } else if (result?.error) {
+            window.electron.logError(`Could not save the accounts panel settings: ${result.error}`);
+        }
+    } catch (err) {
+        window.electron.logError(`Could not save the accounts panel settings: ${err?.message || err}`);
+    }
+}
+
+async function setupAccountsPanel() {
+    if (!$('accounts-panel') || !window.electron.accountsPanel) return;
+
+    try {
+        const result = await window.electron.accountsPanel.readSettings();
+        if (result?.settings) accountsPanelSettings = result.settings;
+    } catch (err) {
+        window.electron.logError(`Could not read the accounts panel settings: ${err?.message || err}`);
+    }
+
+    $('accounts-panel-toggle')?.addEventListener('click', () => {
+        saveAccountsPanelSettings({ collapsed: !accountsPanelSettings.collapsed });
+    });
+    $('accounts-panel-hide')?.addEventListener('click', () => {
+        saveAccountsPanelSettings({ hidden: true });
+    });
+
+    const refreshButton = $('accounts-panel-refresh');
+    refreshButton?.addEventListener('click', () => {
+        refreshButton.disabled = true;
+        requestHiscores(true);
+        // The main process will not refetch anything checked in the last two
+        // minutes anyway; this just stops the button being mashed.
+        setTimeout(() => {
+            refreshButton.disabled = false;
+        }, 3000);
+    });
+
+    const menuItem = $('menu-accounts-panel');
+    menuItem?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        saveAccountsPanelSettings({ hidden: !accountsPanelSettings.hidden });
+        const menu = $('app-menu');
+        menu?.classList.add('hidden');
+        menu?.setAttribute('aria-hidden', 'true');
+    });
+
+    // Picks up anything gone stale; it only reaches the network when it has.
+    setInterval(() => renderAccountsPanel(), 5 * 60 * 1000);
+
+    applyAccountsPanelSettings();
+}
+
+/** Coalesces the re-renders a burst of hiscores results would otherwise cause. */
+function scheduleAccountsPanelRender() {
+    if (accountsPanelRenderTimer) return;
+    accountsPanelRenderTimer = setTimeout(() => {
+        accountsPanelRenderTimer = null;
+        renderAccountsPanel();
+    }, 60);
+}
+
+/**
+ * Asks the main process for every account's hiscores that is missing or
+ * stale. `force` is the refresh button: ask again whatever the age.
+ */
+function requestHiscores(force = false) {
+    if (accountsPanelSettings.hidden || !window.electron.accountsPanel) return;
+
+    for (const account of accounts ?? []) {
+        const name = accountName(account);
+        if (!name) continue;
+        const key = hiscoresKey(name);
+        if (hiscoreLookupsPending.has(key)) continue;
+
+        const existing = hiscoreResults.get(key);
+        if (!force && existing) {
+            const recheck =
+                existing.status === 'ok' ? HISCORES_RECHECK_OK_MS : HISCORES_RECHECK_OTHER_MS;
+            if (Date.now() - existing.receivedAt < recheck) continue;
+        }
+
+        hiscoreLookupsPending.add(key);
+        // The display name only. Nothing else about the account goes over IPC.
+        window.electron.accountsPanel
+            .lookupHiscores(name, { force })
+            .then((result) => {
+                hiscoreResults.set(key, { ...(result || {}), receivedAt: Date.now() });
+            })
+            .catch(() => {
+                hiscoreResults.set(key, {
+                    status: 'error',
+                    message: 'Lookup failed.',
+                    receivedAt: Date.now()
+                });
+            })
+            .finally(() => {
+                hiscoreLookupsPending.delete(key);
+                scheduleAccountsPanelRender();
+            });
+    }
+}
+
+function renderAccountsPanel() {
+    const list = $('accounts-panel-list');
+    if (!list) return;
+
+    applyAccountsPanelSettings();
+    const count = $('accounts-panel-count');
+    if (count) count.textContent = String(accounts?.length ?? 0);
+
+    if (accountsPanelSettings.hidden) return;
+    // Rebuilding now would throw away a nickname half typed; saving re-renders.
+    if (nicknameEditing) return;
+
+    list.replaceChildren(...(accounts ?? []).map(buildAccountCard));
+    requestHiscores(false);
+}
+
+function buildAccountCard(account) {
+    const card = makeElement('li', 'accounts-panel-card');
+
+    const head = makeElement('div', 'apc-head');
+    const names = makeElement('div', 'apc-names');
+    const name = accountName(account);
+    const nickname = accountNickname(account);
+
+    names.append(makeElement('span', 'apc-primary', nickname || name || 'Name not set'));
+    if (nickname) {
+        names.append(makeElement('span', 'apc-secondary', name || 'Name not set'));
+    }
+
+    const edit = makeElement('button', 'apc-edit');
+    edit.type = 'button';
+    const who = name || 'this account';
+    edit.title = nickname ? `Change the nickname for ${who}` : `Give ${who} a nickname`;
+    edit.setAttribute('aria-label', edit.title);
+    const pencil = makeElement('span', null, '✎');
+    pencil.setAttribute('aria-hidden', 'true');
+    edit.append(pencil);
+    edit.addEventListener('click', (event) => {
+        event.stopPropagation();
+        startNicknameEdit(card, account);
+    });
+
+    head.append(names, edit);
+    card.append(head, buildAccountProgress(name, account.accountId));
+    return card;
+}
+
+function buildAccountProgress(name, accountId) {
+    const wrap = makeElement('div', 'apc-progress');
+
+    if (!name) {
+        wrap.append(makeElement('p', 'apc-note', 'No display name yet, so nothing to look up.'));
+        return wrap;
+    }
+
+    const result = hiscoreResults.get(hiscoresKey(name));
+    if (!result) {
+        wrap.append(makeElement('p', 'apc-note', 'Checking the hiscores…'));
+        return wrap;
+    }
+    if (result.fetchedAt) {
+        wrap.title = `Hiscores checked ${formatAge(result.fetchedAt)}`;
+    }
+
+    if (result.status === 'not-found') {
+        wrap.append(
+            makeElement(
+                'p',
+                'apc-note',
+                'Not on the hiscores yet. New accounts and recent name changes can take a while to appear.'
+            )
+        );
+        return wrap;
+    }
+    if (result.status !== 'ok' || !result.data) {
+        const message =
+            result.status === 'invalid'
+                ? 'This name cannot be looked up on the hiscores.'
+                : result.message || 'The hiscores are unavailable right now.';
+        wrap.append(makeElement('p', 'apc-note apc-note-warn', message));
+        return wrap;
+    }
+
+    const data = result.data;
+    const stats = makeElement('div', 'apc-stats');
+    const stat = (value, label, title) => {
+        const box = makeElement('span', 'apc-stat');
+        box.append(makeElement('b', null, value), makeElement('span', null, label));
+        if (title) box.title = title;
+        return box;
+    };
+
+    let totalTitle = '';
+    if (data.totalLevelApproximate) {
+        totalTitle = 'Not ranked overall: this adds up the skills that are ranked.';
+    } else if (Number.isFinite(data.overallRank)) {
+        totalTitle = `Overall rank ${formatNumber(data.overallRank)}`;
+    }
+
+    stats.append(
+        stat(
+            (data.totalLevelApproximate ? '~' : '') + formatNumber(data.totalLevel),
+            'Total',
+            totalTitle
+        ),
+        stat(
+            (data.combatApproximate ? '~' : '') + formatNumber(data.combatLevel),
+            'Combat',
+            data.combatApproximate
+                ? 'A combat skill is not ranked, so this may be a little low.'
+                : ''
+        ),
+        stat(
+            formatXp(data.totalXp),
+            'XP',
+            Number.isFinite(data.totalXp) ? `${formatNumber(data.totalXp)} XP` : ''
+        )
+    );
+    wrap.append(stats);
+
+    if (Array.isArray(data.topSkills) && data.topSkills.length > 0) {
+        wrap.append(
+            makeElement(
+                'p',
+                'apc-top',
+                'Best: ' + data.topSkills.map((s) => `${s.name} ${s.level}`).join(' · ')
+            )
+        );
+    }
+
+    if (Array.isArray(data.skills) && data.skills.length > 0) {
+        const details = makeElement('details', 'apc-skills');
+        details.open = accountsPanelOpenSkills.has(accountId);
+        details.addEventListener('toggle', () => {
+            if (details.open) accountsPanelOpenSkills.add(accountId);
+            else accountsPanelOpenSkills.delete(accountId);
+        });
+        details.append(makeElement('summary', null, 'All skills'));
+        const grid = makeElement('div', 'apc-grid');
+        for (const skill of data.skills) {
+            const ranked = skill.ranked && Number.isFinite(skill.level);
+            const cell = makeElement('span', 'apc-skill');
+            cell.append(
+                makeElement('span', 'apc-skill-name', SKILL_ABBREVIATIONS[skill.name] || skill.name),
+                makeElement('b', null, ranked ? String(skill.level) : '–')
+            );
+            cell.title = ranked
+                ? `${skill.name} ${skill.level} (${formatNumber(skill.xp)} XP)`
+                : `${skill.name}: not ranked`;
+            if (!ranked) cell.classList.add('unranked');
+            grid.append(cell);
+        }
+        details.append(grid);
+        wrap.append(details);
+    }
+
+    return wrap;
+}
+
+/** Swaps the card's name for a text box; Enter or leaving it saves, Escape cancels. */
+function startNicknameEdit(card, account) {
+    if (nicknameEditing) return;
+    const names = card.querySelector('.apc-names');
+    const edit = card.querySelector('.apc-edit');
+    if (!names) return;
+
+    nicknameEditing = account.accountId;
+
+    const input = makeElement('input', 'apc-nick-input');
+    input.type = 'text';
+    input.maxLength = 24;
+    input.value = accountNickname(account);
+    input.placeholder = 'Nickname, e.g. WC account';
+    input.setAttribute('aria-label', `Nickname for ${accountName(account) || 'this account'}`);
+    input.spellcheck = false;
+
+    const hint = makeElement('span', 'apc-secondary', 'Enter saves, Esc cancels, empty removes it.');
+    names.replaceChildren(input, hint);
+    if (edit) edit.hidden = true;
+
+    let finished = false;
+    const finish = async (save) => {
+        if (finished) return;
+        finished = true;
+        if (save) {
+            try {
+                const result = await window.electron.accountsPanel.setNickname(
+                    account.accountId,
+                    input.value
+                );
+                if (result?.nicknames) {
+                    accountNicknames = result.nicknames;
+                } else if (result?.error) {
+                    window.electron.errorAlert(`Could not save the nickname: ${result.error}`);
+                }
+            } catch (err) {
+                window.electron.errorAlert(`Could not save the nickname: ${err?.message || err}`);
+            }
+        }
+        nicknameEditing = null;
+        refreshAccountLabels();
+    };
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            finish(true);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            finish(false);
+        }
+    });
+    input.addEventListener('blur', () => finish(true));
+
+    input.focus();
+    input.select();
+}
+
+/** After a nickname changes: every place that names an account. */
+function refreshAccountLabels() {
+    const select = $('character');
+    if (select) {
+        for (const option of select.options) {
+            const account = accounts.find((a) => a.accountId === option.value);
+            if (account) option.textContent = accountLabel(account);
+        }
+    }
+    // Rebuilds the account picker, the multi-launch list and this panel.
+    renderAccountsList();
 }

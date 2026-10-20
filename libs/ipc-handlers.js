@@ -70,6 +70,21 @@ module.exports = async function (deps) {
         'jar-executor.js'
     ));
     await jarExecutorHandler(deps);
+
+    // The accounts panel: nicknames and its settings, and hiscores lookups.
+    const { registerNicknameHandlers } = require(path.join(
+        projectDir,
+        'libs',
+        'account-nicknames.js'
+    ));
+    registerNicknameHandlers(deps);
+    const { registerHiscoresHandlers } = require(path.join(
+        projectDir,
+        'libs',
+        'hiscores.js'
+    ));
+    registerHiscoresHandlers(deps);
+
     const packageVersion = packageJson.version;
 
     ipcMain.handle('refresh-accounts', async () => {

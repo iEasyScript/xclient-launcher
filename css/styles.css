@@ -1554,3 +1554,322 @@ option {
     color: var(--gold-hi);
     min-height: 1em;
 }
+
+/* ============================ Accounts panel ============================
+   Sits in the top-right corner of the hero, over the video. renderer.js
+   builds the cards and toggles .hidden / .collapsed on #accounts-panel.
+   Display only: the cards deliberately have no hover "button" affordance. */
+
+.accounts-panel {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    width: 292px;
+    /* Clear of the caption along the bottom of the hero. */
+    max-height: calc(100% - 150px);
+    background: rgba(14, 16, 22, 0.86);
+    border: 1px solid rgba(200, 160, 74, 0.30);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+}
+
+.accounts-panel.hidden {
+    display: none;
+}
+
+.accounts-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px;
+}
+
+.accounts-panel-toggle {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    text-align: left;
+    color: var(--gold-hi);
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.accounts-panel-toggle:hover {
+    background: rgba(200, 160, 74, 0.10);
+}
+
+.accounts-panel-toggle:focus-visible,
+.accounts-panel-icon:focus-visible,
+.apc-edit:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.accounts-panel-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.accounts-panel-caret {
+    font-size: 11px;
+    color: var(--text-dim);
+    transition: transform 0.18s ease;
+}
+
+.accounts-panel.collapsed .accounts-panel-caret {
+    transform: rotate(-90deg);
+}
+
+.accounts-panel-icon {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.accounts-panel-icon:hover:not(:disabled) {
+    color: var(--gold-hi);
+    border-color: rgba(200, 160, 74, 0.45);
+}
+
+.accounts-panel-icon:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.accounts-panel-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.accounts-panel.collapsed .accounts-panel-body {
+    display: none;
+}
+
+.accounts-panel-list {
+    list-style: none;
+    margin: 0;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+}
+
+.accounts-panel-card {
+    padding: 9px 10px;
+    background: rgba(27, 31, 41, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-sm);
+}
+
+.apc-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.apc-names {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.apc-primary {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.apc-secondary {
+    font-size: 11px;
+    color: var(--text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.apc-edit {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-faint);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.accounts-panel-card:hover .apc-edit {
+    color: var(--text-dim);
+}
+
+.apc-edit:hover {
+    color: var(--gold-hi) !important;
+    border-color: rgba(200, 160, 74, 0.45);
+}
+
+.apc-nick-input {
+    width: 100%;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+    background: var(--obsidian-0);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-sm);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(200, 160, 74, 0.15);
+}
+
+.apc-nick-input::placeholder {
+    color: var(--text-faint);
+}
+
+.apc-progress {
+    margin-top: 7px;
+}
+
+.apc-note {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--text-faint);
+}
+
+.apc-note-warn {
+    color: var(--molten-hi);
+}
+
+.apc-stats {
+    display: flex;
+    gap: 6px;
+}
+
+.apc-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 2px;
+    background: rgba(8, 9, 13, 0.55);
+    border: 1px solid rgba(200, 160, 74, 0.14);
+    border-radius: var(--radius-sm);
+}
+
+.apc-stat b {
+    font-size: 13.5px;
+    color: var(--gold-hi);
+}
+
+.apc-stat span {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.apc-top {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.apc-skills {
+    margin-top: 5px;
+}
+
+.apc-skills summary {
+    font-size: 11px;
+    color: var(--text-faint);
+    cursor: pointer;
+    list-style-position: inside;
+}
+
+.apc-skills summary:hover {
+    color: var(--gold-hi);
+}
+
+.apc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    margin-top: 5px;
+}
+
+.apc-skill {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(8, 9, 13, 0.45);
+    border-radius: 4px;
+}
+
+.apc-skill b {
+    color: var(--text);
+}
+
+.apc-skill.unranked b {
+    color: var(--text-faint);
+}
+
+.accounts-panel-foot {
+    margin: 0;
+    padding: 6px 10px 8px;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* The menu's on/off item for the panel. */
+.menu-check {
+    float: right;
+    margin-left: 18px;
+    color: var(--gold-hi);
+    visibility: hidden;
+}
+
+#menu-accounts-panel.checked .menu-check {
+    visibility: visible;
+}

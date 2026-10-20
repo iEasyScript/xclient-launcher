@@ -75,6 +75,21 @@ contextBridge.exposeInMainWorld('electron', {
         ipcRenderer.invoke('update-client-jar-ttl', version),
     refreshAccounts: () => ipcRenderer.invoke('refresh-accounts'),
     /**
+     * The accounts panel beside the hero video. Display only: nothing here
+     * logs in or launches. Hiscores lookups take a public display name and
+     * nothing else.
+     */
+    accountsPanel: {
+        readNicknames: () => ipcRenderer.invoke('nicknames:read'),
+        setNickname: (accountId, nickname) =>
+            ipcRenderer.invoke('nicknames:set', accountId, nickname),
+        readSettings: () => ipcRenderer.invoke('accounts-panel:read'),
+        writeSettings: (patch) =>
+            ipcRenderer.invoke('accounts-panel:write', patch),
+        lookupHiscores: (displayName, options) =>
+            ipcRenderer.invoke('hiscores:lookup', displayName, options)
+    },
+    /**
      * The Project X account: Discord sign-in by way of the website, and the
      * identity the client runs as. Distinct from `auth`, which is the launcher's
      * own mock login, and from the Jagex OAuth flow, which authenticates game

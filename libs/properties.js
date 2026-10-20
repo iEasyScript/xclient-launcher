@@ -1,22 +1,35 @@
+const {
+    DEFAULT_PROPERTIES,
+    protectOwnedKeys
+} = require('./account-nicknames.js');
+
 module.exports = async function (deps) {
     const { fs, path, projectxDir, ipcMain, log } = deps;
 
     const filePath = path.resolve(projectxDir, 'resource_versions.json');
 
     // Define your default values here
-    const defaultProperties = {
-        client: '0.0.0',
-        version_pref: '0.0.0',
-        proxyip: '',
-        client_ram: '1g'
-    };
+    const defaultProperties = { ...DEFAULT_PROPERTIES };
+
+    /** The file as it stands, or null if it is missing or unreadable. */
+    function readOnDisk() {
+        try {
+            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        } catch (_) {
+            return null;
+        }
+    }
 
     ipcMain.handle('write-properties', async (event, data) => {
         try {
             try {
+                // Nicknames and the accounts panel settings are written by
+                // their own handlers; keep what is on disk for those so a
+                // stale copy from the renderer cannot undo a change.
+                const toWrite = protectOwnedKeys(data, readOnDisk());
                 fs.writeFileSync(
                     filePath,
-                    JSON.stringify(data, null, 2),
+                    JSON.stringify(toWrite, null, 2),
                     'utf8'
                 );
             } catch (err) {
