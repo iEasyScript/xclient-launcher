@@ -11,6 +11,14 @@
 
 ---
 
+## What it does
+
+The launcher manages your accounts and starts the Project X client. On start it asks GitHub for
+the latest `iEasyScript/xclient` release (`releases/latest`), downloads `projectx-<version>.jar`
+into the `.projectx` folder in your home directory if it is not there yet, and runs it. Set
+`PROJECTX_CLIENT_VERSION` to pin a locally built client instead. The launcher checks its own
+latest release the same way (`iEasyScript/xclient-launcher`).
+
 ## Prerequisites
 Before you begin, ensure you have the following installed on your machine:
 - [Node.js](https://nodejs.org/) (preferably the latest version)
@@ -34,7 +42,7 @@ git clone https://github.com/iEasyScript/xclient-launcher.git
 2) navigate to the project directory
 
 ```bash
-cd projectx-launcher
+cd xclient-launcher
 ```
 
 3) install the dependencies
@@ -87,6 +95,10 @@ npm run linux  # AppImage and snap, requires Linux tooling
 Output lands in `dist/`. `npm run release` is the only script that publishes a
 GitHub release &mdash; the three above stay local.
 
+Releases are tag-driven. CI (`npm test`) must pass first; then push a tag named
+`v<version>` matching `version` in `package.json` and the Release workflow builds the Windows,
+macOS and Linux installers and publishes the GitHub release.
+
 Note that `./build` is electron-builder's `buildResources` directory, not a build
 output: the installer README committed there ships inside the NSIS and DMG targets.
 Gradle's own output is redirected to `.gradle/` so it never mixes into it.
@@ -104,10 +116,9 @@ Gradle's own output is redirected to `.gradle/` so it never mixes into it.
 
 ## Discord
 
-[![Discord Banner 1](https://discord.com/api/guilds/1087718903985221642/widget.png?style=banner1)](https://discord.gg/zaGrfqFEWE)
+[![Discord Banner 1](https://discord.com/api/guilds/1521062459446657125/widget.png?style=banner1)](https://discord.gg/UUwfkXFcub)
 
- 
-If you have any questions, please join our [Discord](https://discord.gg/zaGrfqFEWE) server.
+If you have any questions, please join our [Discord](https://discord.gg/UUwfkXFcub) server.
 
 
 ## ☕ Buy Me a Coffee

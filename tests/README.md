@@ -1,6 +1,13 @@
-# Unit Tests for selectMemoryArgs
+# Launcher tests
 
-This directory contains comprehensive unit tests for the `selectMemoryArgs` function and related memory management utilities from `jar-executor.js`.
+Jest suite for the launcher (`npm test`; CI runs it on every push and pull request). It covers
+account handling and nicknames, hiscores, the Project X account and token refresh, mock auth,
+version-fetch IPC handlers, and the memory utilities described below. Add a `*.test.js` file here
+for every new IPC handler or download flow.
+
+## Memory argument tests
+
+The memory tests cover the `selectMemoryArgs` function and related utilities from `jar-executor.js` (extracted into `libs/memory-utils.js`).
 
 ## Setup
 
@@ -40,10 +47,10 @@ npm run test:coverage
 
 ## Test Coverage
 
-The tests achieve 100% statement, branch, and function coverage for the memory utilities module:
+The memory utilities module is covered at full statement, branch and function level (run `npm run test:coverage` for current figures):
 
-- **27 unit tests** covering individual functions
-- **7 integration tests** covering real-world scenarios  
+- unit tests for the individual functions
+- integration tests for real-world scenarios
 - **Edge cases** including invalid inputs, type safety, and error handling
 - **CLI integration** testing both `--ram=value` and `--ram value` formats
 
