@@ -1,0 +1,135 @@
+{
+  "name": "projectx-launcher",
+  "version": "2.0.0",
+  "description": "Launcher for the Project X client",
+  "main": "src/main/index.js",
+  "author": "Project X",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "cross-env DEBUG=true electron .",
+    "start": "electron .",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "win": "electron-builder --win --publish never",
+    "mac": "electron-builder --mac --publish never",
+    "linux": "electron-builder --linux --publish never",
+    "release": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "detect-browsers": "^6.2.0",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.11",
+    "patchright": "^1.64.3"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.18.1",
+    "jest": "^30.5.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/test"
+    ],
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/main/**/*.js",
+      "src/shared/**/*.js",
+      "!src/main/index.js"
+    ]
+  },
+  "build": {
+    "appId": "com.projectx.launcher",
+    "productName": "Project X Launcher",
+    "asar": true,
+    "directories": {
+      "buildResources": "build"
+    },
+    "artifactName": "Project-X-Launcher-Setup-${version}.${ext}",
+    "files": [
+      "package.json",
+      "src/**/*",
+      "images/projectx_transparent.png",
+      "images/projectx_transparent.ico",
+      "images/projectx_transparent.icns",
+      "assets/hero.mp4",
+      "!**/*.map",
+      "!test/**",
+      "!coverage/**"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "iEasyScript",
+      "repo": "xclient-launcher"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "images/projectx_transparent.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Project X Launcher"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "images/projectx_transparent.icns"
+    },
+    "dmg": {
+      "icon": "images/projectx_transparent.icns",
+      "title": "${productName} Installer",
+      "iconSize": 108,
+      "window": {
+        "width": 900,
+        "height": 560
+      },
+      "contents": [
+        {
+          "x": 180,
+          "y": 300
+        },
+        {
+          "x": 720,
+          "y": 300,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 450,
+          "y": 120,
+          "type": "file",
+          "path": "build/READ THIS BEFORE INSTALL.html"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "images/projectx_transparent.png",
+      "category": "Game"
+    }
+  }
+}

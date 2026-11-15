@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installing Project X Launcher on macOS</title>
+<style>
+    body { margin: 0; background: #f6f4ef; color: #23211c; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 40px 24px 56px; }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+    header img { width: 64px; height: 64px; }
+    h1 { font-size: 26px; margin: 0; }
+    h2 { font-size: 18px; margin: 32px 0 8px; }
+    .why { background: #fff; border: 1px solid #e3ddcf; border-radius: 10px; padding: 16px 18px; margin-top: 20px; }
+    ol { padding-left: 22px; }
+    li { margin: 10px 0; }
+    kbd { font: 13px Menlo, Consolas, monospace; background: #fff; border: 1px solid #d6cfbf; border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; }
+    .command { display: block; margin: 10px 0 6px; padding: 12px 14px; background: #1b1f29; color: #e8c97e; font: 14px Menlo, Consolas, monospace; border-radius: 8px; user-select: all; -webkit-user-select: all; overflow-x: auto; white-space: nowrap; }
+    .note { color: #6d695f; font-size: 14px; }
+    footer { margin-top: 40px; color: #6d695f; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+    <header>
+        <img src="https://xclient.dev/projectx/logo.png" alt="">
+        <h1>Installing Project X Launcher</h1>
+    </header>
+
+    <div class="why">
+        <strong>Why there is an extra step.</strong>
+        Project X Launcher is not signed with a paid Apple developer certificate. macOS puts a
+        "quarantine" flag on apps downloaded from the internet, and for unsigned apps that flag
+        makes macOS say the app "is damaged" or "cannot be opened". Nothing is wrong with the app:
+        removing the flag with one Terminal command fixes it.
+    </div>
+
+    <h2>Steps</h2>
+    <ol>
+        <li>In the installer window, drag <strong>Project X Launcher.app</strong> onto the <strong>Applications</strong> shortcut.</li>
+        <li>Open Terminal: press <kbd>Command</kbd> + <kbd>Space</kbd>, type <strong>Terminal</strong> and press <kbd>Enter</kbd>.</li>
+        <li>
+            Copy this command, paste it into Terminal and press <kbd>Enter</kbd>:
+            <code class="command">xattr -cr "/Applications/Project X Launcher.app"</code>
+            <span class="note">If nothing is printed, it worked.</span>
+        </li>
+        <li>Open Project X Launcher from Launchpad, or from Finder &gt; Applications.</li>
+    </ol>
+
+    <h2>Another way</h2>
+    <p>
+        Right-click (or Control-click) the app in Applications, choose <strong>Open</strong>, then
+        choose <strong>Open</strong> again in the box that appears. If macOS still says the app is
+        damaged, run the Terminal command above.
+    </p>
+
+    <h2>Good to know</h2>
+    <p>
+        You only need to do this once for each version. If you download a newer version by hand
+        later on, you may need to run the command again.
+    </p>
+
+    <footer>Need a hand? Visit <strong>xclient.dev</strong>.</footer>
+</main>
+</body>
+</html>

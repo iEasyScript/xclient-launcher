@@ -1,0 +1,172 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Read the version from package.json
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Make sure the tag matches package.json
+        if: github.ref_type == 'tag'
+        run: |
+          expected="v${{ steps.version.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version ($expected)"
+            exit 1
+          fi
+      - name: Make sure the version tag exists (manual runs)
+        if: github.ref_type != 'tag'
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if [ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            echo "::error::Tag $tag does not exist. Push the tag first; manual runs only rebuild an existing tag."
+            exit 1
+          fi
+      - name: Refuse to touch a release that already has files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          count="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          if [ "$count" != "0" ]; then
+            echo "::error::Release $tag already has $count file(s). Bump the version instead of uploading over a live release."
+            exit 1
+          fi
+
+  windows:
+    needs: check-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.check-version.outputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.yml
+
+  linux:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.check-version.outputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run linux
+      - name: Check the Linux output
+        run: |
+          ls dist/*.AppImage
+          test -f dist/latest-linux.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          if-no-files-found: error
+          path: |
+            dist/*.AppImage
+            dist/latest-linux.yml
+
+  macos:
+    needs: check-version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ needs.check-version.outputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run mac
+      - name: Check the macOS output is complete and universal
+        run: |
+          ls dist/*.dmg
+          ls dist/*.zip
+          test -f dist/latest-mac.yml
+          binary="$(find dist -path '*Project X Launcher.app/Contents/MacOS/Project X Launcher' -type f | head -n 1)"
+          if [ -z "$binary" ]; then
+            echo "::error::App binary not found"
+            exit 1
+          fi
+          archs="$(lipo -archs "$binary")"
+          echo "Architectures: $archs"
+          case "$archs" in
+            *x86_64*) ;;
+            *) echo "::error::The build is not universal (no x86_64)"; exit 1 ;;
+          esac
+          case "$archs" in
+            *arm64*) ;;
+            *) echo "::error::The build is not universal (no arm64)"; exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest-mac.yml
+
+  release:
+    needs: [check-version, windows, linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to touch a release that already has files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ needs.check-version.outputs.version }}"
+          count="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          if [ "$count" != "0" ]; then
+            echo "::error::Release $tag already has $count file(s)."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: Release v${{ needs.check-version.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/windows/*.exe
+            artifacts/windows/latest.yml
+            artifacts/windows/*.blockmap
+            artifacts/linux/*.AppImage
+            artifacts/linux/latest-linux.yml
+            artifacts/macos/*.dmg
+            artifacts/macos/*.zip
+            artifacts/macos/latest-mac.yml
