@@ -36,6 +36,14 @@ const CHANNELS = {
     lookupHiscores: 'px:hiscores:lookup',
     launchJagex: 'px:launch:jagex',
     launchNormal: 'px:launch:normal',
+    getPresets: 'px:presets:get',
+    savePreset: 'px:presets:save',
+    deletePreset: 'px:presets:delete',
+    assignPreset: 'px:presets:assign',
+    listMyScripts: 'px:site:my-scripts',
+    getNews: 'px:site:news',
+    listRunning: 'px:running:list',
+    closeClient: 'px:running:close',
     showError: 'px:dialog:error',
     openLocation: 'px:locations:open',
     log: 'px:log:write'
@@ -43,7 +51,8 @@ const CHANNELS = {
 
 const EVENTS = {
     downloadProgress: 'px:event:download-progress',
-    pairingResult: 'px:event:pairing-result'
+    pairingResult: 'px:event:pairing-result',
+    runningChanged: 'px:event:running-changed'
 };
 
 const none = (...args) => args.length === 0;
@@ -116,6 +125,32 @@ function buildHandlers(ops) {
         [CHANNELS.launchNormal]: {
             check: (...args) => args.length === 1 && v.isLaunchOptions(args[0], false),
             run: (options) => ops.launchNormal(options)
+        },
+        [CHANNELS.getPresets]: { check: none, run: () => ops.getPresets() },
+        [CHANNELS.savePreset]: {
+            check: (...args) => args.length === 1 && v.isPresetInput(args[0]),
+            run: (preset) => ops.savePreset(preset)
+        },
+        [CHANNELS.deletePreset]: {
+            check: (...args) => args.length === 1 && v.isPresetId(args[0]),
+            run: (presetId) => ops.deletePreset(presetId)
+        },
+        [CHANNELS.assignPreset]: {
+            check: (...args) => args.length === 2 && v.isAccountId(args[0]) && (args[1] === null || v.isPresetId(args[1])),
+            run: (accountId, presetId) => ops.assignPreset(accountId, presetId)
+        },
+        [CHANNELS.listMyScripts]: {
+            check: (...args) => args.length === 1 && typeof args[0] === 'boolean',
+            run: (force) => ops.listMyScripts(force)
+        },
+        [CHANNELS.getNews]: {
+            check: (...args) => args.length === 1 && typeof args[0] === 'boolean',
+            run: (force) => ops.getNews(force)
+        },
+        [CHANNELS.listRunning]: { check: none, run: () => ops.listRunning() },
+        [CHANNELS.closeClient]: {
+            check: (...args) => args.length === 1 && v.isString(args[0], 32) && /^[a-f0-9]+$/.test(args[0]),
+            run: (id) => ops.closeClient(id)
         },
         [CHANNELS.showError]: {
             check: (...args) => args.length === 1 && v.isString(args[0], 2000),

@@ -27,13 +27,14 @@ describe('preload bridge', () => {
         const { exposed } = loadPreload();
         expect(Object.keys(exposed)).toEqual(['launcher']);
         expect(Object.keys(exposed.launcher).sort()).toEqual([
-            'accountsFileState', 'addJagexAccounts', 'appInfo', 'cancelPairing', 'checkClientUpdate', 'close',
-            'confirmOutdated', 'deleteAccount', 'downloadClient', 'getNicknames', 'getNormalProfile', 'getPanelSettings',
-            'getSession', 'getSettings', 'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients',
-            'listProfiles', 'log', 'lookupHiscores', 'minimize', 'onDownloadProgress', 'onPairingResult', 'openLocation',
-            'refreshAccounts', 'removeAllAccounts', 'reopenPairingPage', 'resolveClientVersion', 'setAccountProfile',
-            'setNickname', 'setNormalProfile', 'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing',
-            'toggleMaximize'
+            'accountsFileState', 'addJagexAccounts', 'appInfo', 'assignPreset', 'cancelPairing', 'checkClientUpdate',
+            'close', 'closeClient', 'confirmOutdated', 'deleteAccount', 'deletePreset', 'downloadClient', 'getNews',
+            'getNicknames', 'getNormalProfile', 'getPanelSettings', 'getPresets', 'getSession', 'getSettings',
+            'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listMyScripts', 'listProfiles',
+            'listRunning', 'log', 'lookupHiscores', 'minimize', 'onDownloadProgress', 'onPairingResult',
+            'onRunningChanged', 'openLocation', 'refreshAccounts', 'removeAllAccounts', 'reopenPairingPage',
+            'resolveClientVersion', 'savePreset', 'setAccountProfile', 'setNickname', 'setNormalProfile',
+            'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing', 'toggleMaximize'
         ]);
         expect(Object.isFrozen(exposed.launcher)).toBe(true);
         for (const banned of ['invoke', 'send', 'on', 'sendSync', 'ipcRenderer']) {
@@ -64,6 +65,8 @@ describe('preload bridge', () => {
         exposed.launcher.onPairingResult(() => {});
         expect(ipcRenderer.on).toHaveBeenLastCalledWith(EVENTS.pairingResult, expect.any(Function));
         expect(exposed.launcher.onPairingResult('not a function')).toEqual(expect.any(Function));
+        exposed.launcher.onRunningChanged(() => {});
+        expect(ipcRenderer.on).toHaveBeenLastCalledWith(EVENTS.runningChanged, expect.any(Function));
     });
 
     test('the preload channel names match the main process', () => {

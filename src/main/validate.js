@@ -5,6 +5,7 @@ const { isValidAccountId } = require('./nicknames');
 const { isValidProfileName } = require('./profiles');
 const { parseRam } = require('../shared/ram');
 const { LOCATION_KEYS } = require('./locations');
+const { isPresetId } = require('./presets');
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'];
 
@@ -46,7 +47,7 @@ function isLaunchOptions(value, requireAccount) {
     if (!isPlainObject(value)) {
         return false;
     }
-    const allowed = requireAccount ? ['accountId', 'version', 'ram', 'proxy'] : ['version', 'ram', 'proxy'];
+    const allowed = requireAccount ? ['accountId', 'version', 'ram', 'proxy', 'label'] : ['version', 'ram', 'proxy'];
     if (!hasOnlyKeys(value, allowed)) {
         return false;
     }
@@ -55,7 +56,51 @@ function isLaunchOptions(value, requireAccount) {
     }
     return isVersion(value.version)
         && (value.ram === undefined || isString(value.ram, 16))
-        && (value.proxy === undefined || isString(value.proxy, 512));
+        && (value.proxy === undefined || isString(value.proxy, 512))
+        && (value.label === undefined || isString(value.label, 64));
+}
+
+const PRESET_KEYS = ['id', 'name', 'script', 'scriptName', 'startAfterLogin', 'delay', 'autoLogin', 'world', 'profile',
+    'ram', 'proxy', 'breaks', 'stopAfterMinutes', 'whenStopped'];
+
+// A preset from the renderer: the right shape and sizes. presets.js normalises the values.
+function isPresetInput(value) {
+    if (!isPlainObject(value) || !hasOnlyKeys(value, PRESET_KEYS)) {
+        return false;
+    }
+    const strings = { name: 80, scriptName: 120, delay: 16, profile: 128, ram: 16, proxy: 512, breaks: 16, whenStopped: 16 };
+    for (const [key, max] of Object.entries(strings)) {
+        if (value[key] !== undefined && !isString(value[key], max)) {
+            return false;
+        }
+    }
+    if (value.id !== undefined && !isPresetId(value.id)) {
+        return false;
+    }
+    if (value.script !== undefined && value.script !== null && !isString(value.script, 80)) {
+        return false;
+    }
+    for (const key of ['startAfterLogin', 'autoLogin']) {
+        if (value[key] !== undefined && typeof value[key] !== 'boolean') {
+            return false;
+        }
+    }
+    if (value.stopAfterMinutes !== undefined && !Number.isInteger(value.stopAfterMinutes)) {
+        return false;
+    }
+    if (value.world !== undefined) {
+        const world = value.world;
+        if (!isPlainObject(world) || !hasOnlyKeys(world, ['mode', 'number'])) {
+            return false;
+        }
+        if (world.mode !== undefined && !isString(world.mode, 16)) {
+            return false;
+        }
+        if (world.number !== undefined && !Number.isInteger(world.number)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function isPanelPatch(value) {
@@ -73,6 +118,8 @@ module.exports = {
     isProfile,
     isSettingUpdate,
     isLaunchOptions,
+    isPresetInput,
+    isPresetId,
     isPanelPatch,
     isAccountId: isValidAccountId,
     isLocationKey: (value) => LOCATION_KEYS.includes(value),

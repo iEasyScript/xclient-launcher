@@ -112,9 +112,14 @@ function characterName(character) {
     return typeof character.displayName === 'string' && character.displayName.trim() ? character.displayName : UNNAMED_CHARACTER;
 }
 
-// Inherited variables pass through unchanged unless this launch sets its own value.
-function buildEnv(baseEnv, token, character) {
+// Inherited variables pass through unchanged unless this launch sets its own value. A launch
+// without a preset clears any inherited one, so a client never acts on a stale preset.
+function buildEnv(baseEnv, token, character, clientPreset) {
     const env = { ...baseEnv };
+    delete env.PROJECTX_LAUNCH_PRESET;
+    if (clientPreset) {
+        env.PROJECTX_LAUNCH_PRESET = JSON.stringify(clientPreset);
+    }
     if (token) {
         env.PROJECTX_ACCOUNT_TOKEN = token;
     }
@@ -191,6 +196,9 @@ function createLauncher(deps) {
         openExternal,
         readToken,
         accounts,
+        presets = null,
+        toClientPreset = null,
+        running = null,
         env = process.env,
         argv = process.argv,
         platform = process.platform,
@@ -254,7 +262,7 @@ function createLauncher(deps) {
         return child;
     }
 
-    async function start({ version, ram, proxy, normal, character, profile }) {
+    async function start({ version, ram, proxy, normal, character, profile, preset = null, label = null }) {
         const jarPath = paths.jarPath(version);
         if (!fs.existsSync(jarPath)) {
             return { ok: false, error: 'Client ' + version + ' is not installed.' };
@@ -285,8 +293,20 @@ function createLauncher(deps) {
         }
         const printable = args.map((arg) => (arg.startsWith('-proxy=') ? '-proxy=' + redactProxy(proxyUri) : arg));
         log.info('Launching: ' + (platform === 'win32' ? 'javaw ' : 'java ') + printable.join(' '));
+        const clientPreset = preset && toClientPreset ? toClientPreset(preset) : null;
+        if (clientPreset) {
+            log.info('Launch preset "' + clientPreset.name + '": ' + (clientPreset.startAfterLogin ? 'starts ' + clientPreset.script : 'no script to start'));
+        }
         try {
-            spawnClient(args, buildEnv(env, token, character));
+            const child = spawnClient(args, buildEnv(env, token, character, clientPreset));
+            if (running) {
+                running.add(child, {
+                    label: label || (character ? characterName(character) : 'Normal account'),
+                    accountId: character ? String(character.accountId) : null,
+                    presetName: preset ? preset.name : null,
+                    scriptName: preset && preset.script ? preset.scriptName || preset.script : null
+                });
+            }
         } catch (err) {
             log.error('Error running jar: ' + err.message);
             dialog.showErrorBox('Error running jar!', err.message);
@@ -295,7 +315,21 @@ function createLauncher(deps) {
         return { ok: true };
     }
 
-    async function launchJagex({ accountId, version, ram, proxy }) {
+    // An account's preset, if it has one; its memory, proxy and settings profile take the place of
+    // the launcher-wide ones wherever the preset sets them.
+    function presetFor(accountId) {
+        if (!presets) {
+            return null;
+        }
+        try {
+            return presets.forAccount(accountId);
+        } catch (err) {
+            log.warn('Could not read the launch preset: ' + err.message);
+            return null;
+        }
+    }
+
+    async function launchJagex({ accountId, version, ram, proxy, label }) {
         const character = accounts.findById(accountId);
         if (!character) {
             return { ok: false, error: 'That Jagex account could not be found. Pick an account and try again.' };
@@ -303,8 +337,19 @@ function createLauncher(deps) {
         if (!character.sessionId) {
             return { ok: false, error: 'That Jagex account has no saved sign-in. Use "Add Accounts" to sign in again.' };
         }
-        const profile = typeof character.profile === 'string' && character.profile ? character.profile : null;
-        return start({ version, ram, proxy, normal: false, character, profile });
+        const preset = presetFor(accountId);
+        const savedProfile = typeof character.profile === 'string' && character.profile ? character.profile : null;
+        const presetProfile = preset && preset.profile && preset.profile !== 'default' ? preset.profile : null;
+        return start({
+            version,
+            ram: preset && preset.ram ? preset.ram : ram,
+            proxy: preset && preset.proxy ? preset.proxy : proxy,
+            normal: false,
+            character,
+            profile: presetProfile || savedProfile,
+            preset,
+            label
+        });
     }
 
     async function launchNormal({ version, ram, proxy }) {

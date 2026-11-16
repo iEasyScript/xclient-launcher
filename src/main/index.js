@@ -20,6 +20,9 @@ const { findBrowser, launchBrowser } = require('./jagex/browser');
 const { runJagexLogin } = require('./jagex/login');
 const { createHiscoresService, HISCORES_URL } = require('./hiscores-service');
 const { createLauncher } = require('./launch');
+const { createPresetStore, toClientPreset } = require('./presets');
+const { createSiteData } = require('./site-data');
+const { createRunningRegistry } = require('./running');
 const { createLocations } = require('./locations');
 const { createOperations } = require('./operations');
 const { registerIpc, EVENTS } = require('./ipc');
@@ -74,6 +77,9 @@ function start() {
     const client = createClientService({ paths, settings, siteUrl, fetch: fetchImpl, log });
     const accounts = createAccountsStore({ file: paths.accountsFile, fetch: fetchImpl, log });
     const hiscores = createHiscoresService({ fetch: fetchImpl, cacheFile: paths.hiscoresCacheFile, log, userAgent });
+    const presets = createPresetStore({ file: path.join(app.getPath('userData'), 'launch-presets.json'), log });
+    const siteData = createSiteData({ fetch: fetchImpl, siteUrl, readToken: () => account.readToken(), log });
+    const running = createRunningRegistry({ log, onChange: (clients) => emit('runningChanged', clients) });
     const launcher = createLauncher({
         paths,
         log,
@@ -84,7 +90,10 @@ function start() {
         },
         openExternal: (url) => shell.openExternal(url),
         readToken: () => account.readToken(),
-        accounts
+        accounts,
+        presets,
+        toClientPreset,
+        running
     });
     const locations = createLocations({
         paths,
@@ -116,7 +125,10 @@ function start() {
         hiscores,
         launcher,
         locations,
-        emit
+        emit,
+        presets,
+        siteData,
+        running
     });
 
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

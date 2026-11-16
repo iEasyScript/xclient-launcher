@@ -26,7 +26,10 @@ function createOperations(ctx) {
         hiscores,
         launcher,
         locations,
-        emit
+        emit,
+        presets = null,
+        siteData = null,
+        running = null
     } = ctx;
 
     let jagexLoginRunning = false;
@@ -158,6 +161,13 @@ function createOperations(ctx) {
             } catch (err) {
                 log.warn('Could not remove the nickname of a deleted account: ' + err.message);
             }
+            if (presets) {
+                try {
+                    presets.unassign([accountId]);
+                } catch (err) {
+                    log.warn('Could not remove the preset of a deleted account: ' + err.message);
+                }
+            }
             return { ok: true };
         },
         removeAllAccounts: async () => {
@@ -182,6 +192,13 @@ function createOperations(ctx) {
                 nicknames.removeNicknames('all');
             } catch (err) {
                 log.warn('Could not clear nicknames: ' + err.message);
+            }
+            if (presets) {
+                try {
+                    presets.unassign('all');
+                } catch (err) {
+                    log.warn('Could not clear preset assignments: ' + err.message);
+                }
             }
             return { ok: true };
         },
@@ -253,6 +270,55 @@ function createOperations(ctx) {
                 return failure(err);
             }
         },
+
+        getPresets: () => {
+            try {
+                return { ok: true, ...presets.list() };
+            } catch (err) {
+                log.warn('Could not read the launch presets: ' + err.message);
+                return { ...failure(err), presets: [], assignments: {} };
+            }
+        },
+        savePreset: (preset) => {
+            try {
+                const { store, preset: saved } = presets.save(preset);
+                return { ok: true, preset: saved, ...store };
+            } catch (err) {
+                log.warn('Could not save a launch preset: ' + err.message);
+                return failure(err);
+            }
+        },
+        deletePreset: async (presetId) => {
+            const confirmed = await confirm({
+                title: 'Delete preset?',
+                message: 'Delete this launch preset?',
+                detail: 'Accounts that use it will open without a preset.',
+                buttons: ['Cancel', 'Delete'],
+                defaultId: 0,
+                cancelId: 0,
+                confirmIndex: 1
+            });
+            if (!confirmed) {
+                return { ok: false, cancelled: true };
+            }
+            try {
+                return { ok: true, ...presets.remove(presetId) };
+            } catch (err) {
+                log.warn('Could not delete a launch preset: ' + err.message);
+                return failure(err);
+            }
+        },
+        assignPreset: (accountId, presetId) => {
+            try {
+                return { ok: true, ...presets.assign(accountId, presetId) };
+            } catch (err) {
+                return failure(err);
+            }
+        },
+        listMyScripts: (force) => siteData.myScripts(force),
+        getNews: (force) => siteData.news(force),
+        listRunning: () => ({ ok: true, clients: running.list() }),
+        closeClient: (id) => running.close(id),
 
         showError,
         openLocation: async (key) => {

@@ -61,6 +61,16 @@ const api = {
     launchJagex: call('px:launch:jagex'),
     launchNormal: call('px:launch:normal'),
 
+    getPresets: call('px:presets:get'),
+    savePreset: call('px:presets:save'),
+    deletePreset: call('px:presets:delete'),
+    assignPreset: call('px:presets:assign'),
+    listMyScripts: call('px:site:my-scripts'),
+    getNews: call('px:site:news'),
+    listRunning: call('px:running:list'),
+    closeClient: call('px:running:close'),
+    onRunningChanged: subscribe('px:event:running-changed'),
+
     showError: call('px:dialog:error'),
     openLocation: call('px:locations:open'),
     log: call('px:log:write')

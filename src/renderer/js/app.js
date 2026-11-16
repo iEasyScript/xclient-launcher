@@ -19,31 +19,41 @@
         accounts: [],
         newestFirst: [],
         nicknames: {},
-        panel: { hidden: false, collapsed: false },
         selectedId: null,
         ticks: new Set(),
         updateTimer: null,
         watchStamp: null,
         reloading: false,
-        accountErrors: new Set()
+        accountErrors: new Set(),
+        presetStore: { presets: [], assignments: {} },
+        levels: {},
+        editingId: null,
+        running: [],
+        user: null,
+        view: 'play'
     };
 
     const els = {
         title: $('title-text'),
         playNormal: $('play-normal'),
         playJagex: $('play-jagex'),
-        accountActions: $('account-actions'),
+        playJagexText: $('play-jagex-text'),
+        heroGreeting: $('hero-greeting'),
+        heroTitle: $('hero-title'),
+        heroSubtitle: $('hero-subtitle'),
+        grid: $('account-grid'),
+        summary: $('accounts-summary'),
+        selectAll: $('select-all'),
         addAccounts: $('add-accounts'),
+        addAccounts2: $('add-accounts-2'),
         removeAll: $('remove-all'),
-        accountField: $('account-field'),
         refreshAccounts: $('refresh-accounts'),
         version: $('version-select'),
         profile: $('profile-select'),
         ram: $('ram-select'),
         proxy: $('proxy-input'),
-        multiToggle: $('multi-toggle'),
-        multiPanel: $('multi-panel'),
-        multiList: $('multi-list'),
+        launchLabel: $('launch-label'),
+        launchSub: $('launch-sub'),
         multiGap: $('multi-gap'),
         multiPlay: $('multi-play'),
         multiStatus: $('multi-status'),
@@ -56,7 +66,13 @@
         bar: $('progress-bar'),
         barText: $('progress-text'),
         progressStatus: $('progress-status'),
-        video: $('hero-video')
+        video: $('hero-video'),
+        userCard: $('user-card'),
+        userName: $('user-name'),
+        userTier: $('user-tier'),
+        userBalance: $('user-balance'),
+        clientStatus: $('client-status'),
+        clientStatusText: $('client-status-text')
     };
 
     const versionOf = (name) => name.slice('projectx-'.length, -'.jar'.length);
@@ -69,7 +85,7 @@
     $('win-max').addEventListener('click', () => api.toggleMaximize());
     $('win-close').addEventListener('click', () => api.close());
     api.appInfo().then((info) => {
-        els.title.textContent = 'Project X Launcher - ' + info.version;
+        els.title.textContent = 'Project X Launcher ' + info.version;
     }).catch(() => {});
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -83,6 +99,38 @@
     }
     reducedMotion.addEventListener('change', applyMotionPreference);
     applyMotionPreference();
+
+    // Views
+
+    const views = { play: $('view-play'), presets: $('view-presets'), settings: $('view-settings') };
+
+    function showView(name) {
+        state.view = name;
+        for (const [key, section] of Object.entries(views)) {
+            section.hidden = key !== name;
+        }
+        for (const link of document.querySelectorAll('.nav-link')) {
+            const active = link.dataset.view === name;
+            link.classList.toggle('active', active);
+            if (active) {
+                link.setAttribute('aria-current', 'page');
+            } else {
+                link.removeAttribute('aria-current');
+            }
+        }
+        if (name === 'play') {
+            applyMotionPreference();
+        } else {
+            els.video.pause();
+        }
+        if (name === 'presets') {
+            presets.show();
+        }
+    }
+
+    for (const link of document.querySelectorAll('.nav-link')) {
+        link.addEventListener('click', () => showView(link.dataset.view));
+    }
 
     // Progress overlay
 
@@ -170,7 +218,7 @@
         }
     });
 
-    // Profiles
+    // Normal account profile (Settings)
 
     function setProfileValue(value) {
         const options = Array.from(els.profile.options).map((option) => option.value);
@@ -178,7 +226,6 @@
     }
 
     async function refreshProfiles() {
-        const current = els.profile.value;
         let names = [];
         try {
             names = await api.listProfiles();
@@ -189,44 +236,21 @@
             PX.el('option', { value: 'default', text: 'Default' }),
             ...names.map((name) => PX.el('option', { value: name, text: name }))
         );
-        setProfileValue(current || 'default');
-    }
-
-    async function applyProfileForSelection() {
         try {
-            if (state.selectedId) {
-                const listed = await api.listAccounts();
-                const fresh = listed.ok ? listed.accounts.find((account) => account.accountId === state.selectedId) : null;
-                setProfileValue((fresh && fresh.profile) || 'default');
-            } else {
-                setProfileValue((await api.getNormalProfile()) || 'default');
-            }
-        } catch (err) {
-            PX.log('warn', 'Could not apply the profile: ' + err.message);
+            setProfileValue((await api.getNormalProfile()) || 'default');
+        } catch (_) {
+            setProfileValue('default');
         }
     }
 
     els.profile.addEventListener('change', async () => {
-        const profile = els.profile.value || 'default';
-        if (state.selectedId) {
-            const result = await api.setAccountProfile(state.selectedId, profile);
-            if (!result.ok) {
-                await PX.showError(result.error);
-                return;
-            }
-            const account = findAccount(state.selectedId);
-            if (account) {
-                account.profile = profile;
-            }
-        } else {
-            const result = await api.setNormalProfile(profile);
-            if (!result.ok) {
-                PX.log('warn', 'Could not save the profile: ' + result.error);
-            }
+        const result = await api.setNormalProfile(els.profile.value || 'default');
+        if (!result.ok) {
+            PX.log('warn', 'Could not save the profile: ' + result.error);
         }
     });
 
-    // RAM and proxy
+    // RAM and proxy (Settings)
 
     async function setupRam(stored) {
         const { value, options } = R.ramOptionsFor(stored);
@@ -308,70 +332,197 @@
         }
     }
 
-    const picker = PX.createPicker({
-        root: $('account-picker'),
-        onSelect: (id) => selectAccount(id),
-        onDelete: (id) => deleteAccount(id)
-    });
+    function presetOf(accountId) {
+        const presetId = state.presetStore.assignments[accountId];
+        return presetId ? state.presetStore.presets.find((preset) => preset.id === presetId) || null : null;
+    }
 
-    function renderMulti() {
+    function runningFor(accountId) {
+        return state.running.filter((client) => client.accountId === accountId);
+    }
+
+    function cardMeta(account, preset) {
+        const parts = [];
+        if (preset && preset.script && preset.startAfterLogin) {
+            parts.push('\u2192 ' + (preset.scriptName || preset.script));
+        }
+        if (state.levels[account.accountId]) {
+            parts.push(state.levels[account.accountId]);
+        }
+        if (preset) {
+            if (preset.world.mode === 'world') {
+                parts.push('World ' + preset.world.number);
+            } else if (preset.world.mode === 'members') {
+                parts.push('Any members world');
+            } else if (preset.world.mode === 'free') {
+                parts.push('Any free world');
+            }
+            if (preset.proxy) {
+                parts.push('Own proxy');
+            }
+            if (preset.ram) {
+                parts.push(R.ramOptionsFor(preset.ram).options.find((option) => option.value === preset.ram)?.label || preset.ram);
+            }
+        }
+        return parts.join(' \u00B7 ') || (account.profile && account.profile !== 'default' ? 'Profile: ' + account.profile : 'Launcher settings');
+    }
+
+    function tickButton(account) {
+        const checked = state.ticks.has(account.accountId);
+        const button = PX.el('button', {
+            className: 'tick',
+            type: 'button',
+            role: 'checkbox',
+            'aria-checked': checked ? 'true' : 'false',
+            'aria-label': 'Select ' + labelOf(account)
+        }, [PX.el('span', { 'aria-hidden': 'true', text: '\u2713' })]);
+        button.addEventListener('click', () => {
+            if (state.ticks.has(account.accountId)) {
+                state.ticks.delete(account.accountId);
+            } else {
+                state.ticks.add(account.accountId);
+            }
+            renderCards();
+        });
+        return button;
+    }
+
+    function presetSelect(account, preset) {
+        const select = PX.el('select', { className: 'select', 'aria-label': 'Preset for ' + labelOf(account) },
+            [PX.el('option', { value: '', text: 'No preset' })].concat(state.presetStore.presets.map((item) => PX.el('option', { value: item.id, text: item.name }))));
+        select.value = preset ? preset.id : '';
+        select.addEventListener('change', async () => {
+            const result = await api.assignPreset(account.accountId, select.value || null);
+            if (!result.ok) {
+                await PX.showError('Could not set the preset: ' + result.error);
+                return;
+            }
+            presets.setStore(result);
+        });
+        return select;
+    }
+
+    function nameArea(account) {
+        if (state.editingId === account.accountId) {
+            const input = PX.el('input', { className: 'input nickname-edit', type: 'text', maxlength: '24', value: state.nicknames[account.accountId] || '', placeholder: F.displayName(account), 'aria-label': 'Nickname' });
+            const finish = async (save) => {
+                if (state.editingId !== account.accountId) {
+                    return;
+                }
+                state.editingId = null;
+                if (save) {
+                    const result = await api.setNickname(account.accountId, input.value);
+                    if (result.ok) {
+                        state.nicknames = result.nicknames;
+                    } else {
+                        await PX.showError('Could not save the nickname: ' + result.error);
+                    }
+                }
+                renderCards();
+            };
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    finish(true);
+                } else if (event.key === 'Escape') {
+                    finish(false);
+                }
+            });
+            input.addEventListener('blur', () => finish(true));
+            setTimeout(() => input.focus(), 0);
+            return input;
+        }
+        const label = labelOf(account);
+        const real = F.displayName(account);
+        const rename = PX.el('button', { className: 'icon-btn', type: 'button', title: 'Rename', 'aria-label': 'Rename ' + label, text: '\u270E' });
+        rename.addEventListener('click', () => {
+            state.editingId = account.accountId;
+            renderCards();
+        });
+        const remove = PX.el('button', { className: 'icon-btn danger', type: 'button', title: 'Remove', 'aria-label': 'Remove ' + label, text: '\u2715' });
+        remove.addEventListener('click', () => deleteAccount(account.accountId));
+        return PX.el('div', { className: 'card-title-row' }, [
+            PX.el('span', { className: 'card-name', text: label, title: label }),
+            label !== real ? PX.el('span', { className: 'card-realname', text: real }) : null,
+            rename,
+            remove
+        ]);
+    }
+
+    function accountCard(account) {
+        const preset = presetOf(account.accountId);
+        const running = runningFor(account.accountId);
+        const label = labelOf(account);
+        const play = PX.el('button', { className: 'btn btn-small card-play', type: 'button', text: 'Play', title: running.length ? 'Open another client for this account' : 'Open the client' });
+        play.addEventListener('click', () => PX.runBusy(play, () => launchOne(account.accountId)));
+        return PX.el('div', { className: 'account-card' + (state.ticks.has(account.accountId) ? ' selected' : '') }, [
+            tickButton(account),
+            PX.el('div', { className: 'avatar', 'aria-hidden': 'true', text: (label.trim()[0] || '?').toUpperCase() }),
+            PX.el('div', { className: 'card-main' }, [
+                nameArea(account),
+                PX.el('div', { className: 'card-preset' }, [
+                    PX.el('span', { text: 'Preset' }),
+                    presetSelect(account, preset)
+                ]),
+                PX.el('span', { className: 'card-meta', text: cardMeta(account, preset) })
+            ]),
+            PX.el('div', { className: 'card-side' }, [
+                PX.el('span', { className: 'status-pill' + (running.length ? ' running' : ''), text: running.length ? 'Running' : 'Offline' }),
+                play
+            ])
+        ]);
+    }
+
+    function renderCards() {
         for (const id of Array.from(state.ticks)) {
             if (!findAccount(id)) {
                 state.ticks.delete(id);
             }
         }
         if (state.accounts.length === 0) {
-            els.multiList.replaceChildren(PX.el('div', { className: 'multi-empty', text: 'No Jagex accounts added yet.' }));
+            els.grid.replaceChildren(PX.el('div', { className: 'empty' }, [
+                'No Jagex accounts yet. Press ',
+                PX.el('strong', { text: '+ Add account' }),
+                ' to sign in with Jagex, or use "Play normal account" for a non-Jagex login.'
+            ]));
         } else {
-            els.multiList.replaceChildren(...state.accounts.map((account) => {
-                const box = PX.el('input', { type: 'checkbox' });
-                box.checked = state.ticks.has(account.accountId);
-                box.addEventListener('change', () => {
-                    if (box.checked) {
-                        state.ticks.add(account.accountId);
-                    } else {
-                        state.ticks.delete(account.accountId);
-                    }
-                    updateMultiButton();
-                });
-                const label = labelOf(account);
-                return PX.el('label', { className: 'multi-row', title: label }, [box, PX.el('span', { text: label })]);
-            }));
+            els.grid.replaceChildren(...state.accounts.map(accountCard));
         }
-        updateMultiButton();
+        const runningCount = state.accounts.filter((account) => runningFor(account.accountId).length > 0).length;
+        els.summary.textContent = state.accounts.length
+            ? state.accounts.length + (state.accounts.length === 1 ? ' account' : ' accounts') + (runningCount ? ' \u00B7 ' + runningCount + ' running' : '')
+            : '';
+        els.selectAll.hidden = state.accounts.length === 0;
+        els.selectAll.textContent = state.accounts.length && state.ticks.size === state.accounts.length ? 'Select none' : 'Select all';
+        els.refreshAccounts.hidden = state.accounts.length === 0;
+        renderHero();
+        updateLaunchBar();
     }
 
-    function updateMultiButton() {
-        els.multiPlay.textContent = 'Play Selected (' + state.ticks.size + ')';
-        els.multiPlay.disabled = state.ticks.size === 0 || multi.isRunning();
-    }
-
-    function refreshLabels() {
-        picker.render({ accounts: state.accounts, nicknames: state.nicknames, selectedId: state.selectedId });
-        renderMulti();
-        panel.render();
-    }
-
-    // Sidebar layout follows the number of accounts, never the button text.
-    function layout() {
+    function renderHero() {
         const hasAccounts = state.accounts.length > 0;
-        els.playJagex.textContent = hasAccounts ? 'Play With Jagex Account' : 'Login Jagex Account';
-        els.accountActions.hidden = !hasAccounts;
-        els.accountField.hidden = !hasAccounts;
-        if (!hasAccounts) {
-            state.selectedId = null;
-            picker.close();
-        } else if (state.selectedId !== null && !findAccount(state.selectedId)) {
-            state.selectedId = state.accounts[0].accountId;
-        }
-        refreshLabels();
+        const remembered = state.selectedId ? findAccount(state.selectedId) : null;
+        els.playJagexText.textContent = !hasAccounts ? 'Add a Jagex account' : remembered ? 'Play ' + labelOf(remembered) : 'Play with Jagex account';
+        const count = state.running.length;
+        els.heroTitle.textContent = count ? count + (count === 1 ? ' client running' : ' clients running') : 'Ready to play';
+        els.heroSubtitle.textContent = hasAccounts
+            ? 'Tick accounts below and press Launch. Each one can start its own script the moment it logs in.'
+            : 'Add your Jagex accounts to launch them in one click, each with its own preset.';
+    }
+
+    function updateLaunchBar() {
+        const count = state.ticks.size;
+        els.launchLabel.textContent = count === 0 ? 'No accounts selected' : count + (count === 1 ? ' account selected' : ' accounts selected');
+        const withPreset = Array.from(state.ticks).filter((id) => presetOf(id)).length;
+        els.launchSub.textContent = count === 0
+            ? 'Tick the accounts you want to open together'
+            : withPreset === count ? 'Each starts its preset after login' : withPreset ? withPreset + ' of them have a preset' : 'They open with the launcher settings';
+        els.multiPlay.textContent = count ? 'Launch ' + count : 'Launch';
+        els.multiPlay.disabled = count === 0 || multi.isRunning();
     }
 
     function selectAccount(id) {
         state.selectedId = id;
         saveSetting('selected_account', id);
-        refreshLabels();
-        applyProfileForSelection();
     }
 
     async function onAccountsFileChanged() {
@@ -385,21 +536,16 @@
             if (!list) {
                 return;
             }
-            if (previousCount > 0 && list.length === 0) {
-                PX.log('info', 'No saved Jagex accounts remain');
-            }
             setAccounts(list);
             const next = S.selectionAfterReload(state.accounts, previousCount, state.selectedId);
             state.selectedId = next.accountId;
             if (next.changedCount && next.accountId !== null) {
-                // Saved so the remembered selection below does not switch back to the old character.
                 await saveSetting('selected_account', next.accountId);
             }
             restoreSelection();
-            layout();
+            renderCards();
+            loadLevels();
             await refreshVersionList(selectedVersion());
-            await refreshProfiles();
-            await applyProfileForSelection();
         } finally {
             state.reloading = false;
         }
@@ -441,19 +587,49 @@
         if (result.accounts) {
             setAccounts(result.accounts);
             restoreSelection();
-            layout();
-            await applyProfileForSelection();
+            renderCards();
         }
     }
 
-    els.refreshAccounts.addEventListener('click', async () => {
-        els.refreshAccounts.disabled = true;
-        try {
-            await refreshFromJagex(false);
-        } finally {
-            els.refreshAccounts.disabled = false;
+    els.refreshAccounts.addEventListener('click', () => PX.runBusy(els.refreshAccounts, () => refreshFromJagex(false)));
+
+    // Levels from the public hiscores, one account at a time (the service caches and rate-limits).
+    let levelsRunning = false;
+    async function loadLevels() {
+        if (levelsRunning) {
+            return;
         }
-    });
+        levelsRunning = true;
+        try {
+            for (const account of state.accounts.slice()) {
+                const name = F.displayName(account);
+                if (!name) {
+                    continue;
+                }
+                try {
+                    const result = await api.lookupHiscores(name, false);
+                    if (result && result.status === 'ok' && result.data) {
+                        const data = result.data;
+                        const parts = [];
+                        if (typeof data.combatLevel === 'number') {
+                            parts.push('Combat ' + F.formatNumber(data.combatLevel));
+                        }
+                        if (typeof data.totalLevel === 'number') {
+                            parts.push('Total ' + F.formatNumber(data.totalLevel));
+                        }
+                        if (parts.length) {
+                            state.levels[account.accountId] = parts.join(' \u00B7 ');
+                            renderCards();
+                        }
+                    }
+                } catch (_) {
+                    // levels are a nicety; a failed lookup just leaves them out
+                }
+            }
+        } finally {
+            levelsRunning = false;
+        }
+    }
 
     async function deleteAccount(id) {
         let result;
@@ -469,9 +645,12 @@
             await PX.showError('Failed to delete account: ' + result.error);
             return;
         }
-        const nicknames = await api.getNicknames();
+        const [nicknames, store] = await Promise.all([api.getNicknames(), api.getPresets()]);
         if (nicknames.ok) {
             state.nicknames = nicknames.nicknames;
+        }
+        if (store.ok) {
+            presets.setStore(store);
         }
         const list = await readAccounts();
         if (list) {
@@ -481,8 +660,8 @@
             state.selectedId = state.accounts.length ? state.accounts[0].accountId : null;
             await saveSetting('selected_account', state.selectedId);
         }
-        layout();
-        await applyProfileForSelection();
+        state.ticks.delete(id);
+        renderCards();
     }
 
     async function addAccounts() {
@@ -495,6 +674,7 @@
     }
 
     els.addAccounts.addEventListener('click', () => PX.runBusy(els.addAccounts, addAccounts));
+    els.addAccounts2.addEventListener('click', () => PX.runBusy(els.addAccounts2, addAccounts));
 
     els.removeAll.addEventListener('click', () => PX.runBusy(els.removeAll, async () => {
         const result = await api.removeAllAccounts();
@@ -508,47 +688,36 @@
         setAccounts([]);
         state.nicknames = {};
         state.ticks.clear();
+        state.levels = {};
         await saveSetting('selected_account', null);
-        layout();
-        await applyProfileForSelection();
+        const store = await api.getPresets();
+        if (store.ok) {
+            presets.setStore(store);
+        }
+        renderCards();
     }));
 
-    // Accounts panel
-
-    const panel = PX.createPanel({
-        getState: () => ({ accounts: state.accounts, nicknames: state.nicknames, panel: state.panel }),
-        onPanelChange: (patch) => changePanel(patch),
-        onNicknamesSaved: (map) => {
-            if (map) {
-                state.nicknames = map;
-            }
-            refreshLabels();
+    els.selectAll.addEventListener('click', () => {
+        if (state.ticks.size === state.accounts.length) {
+            state.ticks.clear();
+        } else {
+            state.accounts.forEach((account) => state.ticks.add(account.accountId));
         }
+        renderCards();
     });
 
-    function applyPanel() {
-        menu.setPanelShown(!state.panel.hidden);
-        panel.render();
-    }
+    // Menu (the old accounts panel item stays hidden)
 
-    async function changePanel(patch) {
-        state.panel = { ...state.panel, ...patch };
-        applyPanel();
-        try {
-            const result = await api.setPanelSettings(patch);
-            if (result.ok) {
-                state.panel = result.panel;
-                applyPanel();
-            }
-        } catch (err) {
-            PX.log('warn', 'Could not save the panel settings: ' + err.message);
-        }
-    }
-
-    const menu = PX.createMenu({ onTogglePanel: () => changePanel({ hidden: !state.panel.hidden }) });
+    const menu = PX.createMenu({ onTogglePanel: () => {} });
     menu.setSignedIn(false);
 
     // Client updates
+
+    function setClientStatus(kind, text) {
+        els.clientStatus.classList.toggle('ok', kind === 'ok');
+        els.clientStatus.classList.toggle('warn', kind === 'warn');
+        els.clientStatusText.textContent = text;
+    }
 
     async function runClientUpdateCheck() {
         try {
@@ -561,8 +730,10 @@
             if (result.needsUpdate) {
                 els.bannerVersion.textContent = result.latest;
                 els.banner.hidden = false;
+                setClientStatus('warn', 'Client ' + result.latest + ' available');
             } else {
                 els.banner.hidden = true;
+                setClientStatus('ok', 'Client ' + (fresh.client || result.latest || '') + ' \u00B7 up to date');
             }
         } catch (err) {
             PX.log('warn', 'Client update check failed: ' + err.message);
@@ -594,6 +765,7 @@
             }
             await refreshVersionList(current.version);
             await saveSetting('client', current.version);
+            setClientStatus('ok', 'Client ' + current.version + ' \u00B7 up to date');
         } finally {
             hideOverlay();
             scheduleUpdateChecks();
@@ -613,17 +785,19 @@
     });
     const { ensureJar, chooseLaunchVersion } = flows;
 
-    async function launchSelectedJagex() {
-        if (!state.selectedId || !findAccount(state.selectedId)) {
-            await PX.showError('Pick a Jagex account first. Choose one from the Jagex Account list, or use "Play Normal Account".');
+    async function launchOne(accountId) {
+        const account = findAccount(accountId);
+        if (!account) {
+            await PX.showError('That Jagex account could not be found. Refresh the list and try again.');
             return;
         }
-        const accountId = state.selectedId;
+        selectAccount(accountId);
+        renderHero();
         const version = await chooseLaunchVersion();
         if (!version || !(await ensureJar(version))) {
             return;
         }
-        const result = await api.launchJagex({ accountId, version, ram: currentRam(), proxy: currentProxy() });
+        const result = await api.launchJagex({ accountId, version, ram: currentRam(), proxy: currentProxy(), label: labelOf(account).slice(0, 64) });
         if (!result.ok && !result.silent) {
             await PX.showError(result.error);
         }
@@ -645,14 +819,23 @@
     }
 
     els.playNormal.addEventListener('click', () => PX.runBusy(els.playNormal, launchNormal));
-    els.playJagex.addEventListener('click', () => PX.runBusy(els.playJagex, () => (state.accounts.length === 0 ? addAccounts() : launchSelectedJagex())));
+    els.playJagex.addEventListener('click', () => PX.runBusy(els.playJagex, () => {
+        if (state.accounts.length === 0) {
+            return addAccounts();
+        }
+        const target = state.selectedId && findAccount(state.selectedId) ? state.selectedId : state.accounts[0].accountId;
+        return launchOne(target);
+    }));
 
     // Several accounts
 
     let multiOptions = { ram: '1g', proxy: '' };
     const multi = M.createMultiLauncher({
         prepare: () => flows.prepareMulti(),
-        launchOne: (accountId, version) => api.launchJagex({ accountId, version, ram: multiOptions.ram, proxy: multiOptions.proxy }),
+        launchOne: (accountId, version) => {
+            const account = findAccount(accountId);
+            return api.launchJagex({ accountId, version, ram: multiOptions.ram, proxy: multiOptions.proxy, label: account ? labelOf(account).slice(0, 64) : undefined });
+        },
         sleep: PX.sleep,
         onStatus: (text) => {
             els.multiStatus.textContent = text;
@@ -660,26 +843,57 @@
         log: PX.log
     });
 
-    els.multiToggle.addEventListener('click', () => {
-        const open = els.multiPanel.hidden;
-        els.multiPanel.hidden = !open;
-        els.multiToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-    $('multi-all').addEventListener('click', () => {
-        state.accounts.forEach((account) => state.ticks.add(account.accountId));
-        renderMulti();
-    });
-    $('multi-none').addEventListener('click', () => {
-        state.ticks.clear();
-        renderMulti();
-    });
     els.multiPlay.addEventListener('click', () => PX.runBusy(els.multiPlay, async () => {
         const characters = state.accounts
             .filter((account) => state.ticks.has(account.accountId))
             .map((account) => ({ accountId: account.accountId, label: labelOf(account) }));
         multiOptions = { ram: currentRam(), proxy: currentProxy() };
         await multi.run(characters, Number(els.multiGap.value));
-    }).finally(updateMultiButton));
+    }).finally(updateLaunchBar));
+
+    // Presets and the activity column
+
+    const presets = PX.createPresets({
+        getAccounts: () => state.accounts,
+        labelOf,
+        onStoreChange: (store) => {
+            state.presetStore = store;
+            renderCards();
+        }
+    });
+
+    const side = PX.createSide({
+        onRunningChange: (clients) => {
+            state.running = clients;
+            renderCards();
+        }
+    });
+
+    // Signed-in player
+
+    function greeting() {
+        const hour = new Date().getHours();
+        return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    }
+
+    function showUser(user) {
+        state.user = user || null;
+        if (!user) {
+            els.userCard.hidden = true;
+            els.heroGreeting.textContent = 'Welcome back';
+            return;
+        }
+        const name = user.name || user.discordUsername || 'Player';
+        els.userName.textContent = name;
+        els.userName.title = name;
+        const membership = user.membership && user.membership.name ? user.membership.name : null;
+        els.userTier.hidden = !membership;
+        els.userTier.textContent = membership || '';
+        const cents = typeof user.balanceCents === 'number' ? user.balanceCents : typeof user.tokenBalance === 'number' ? user.tokenBalance * 100 : null;
+        els.userBalance.textContent = cents === null ? '-' : (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2)) + ' X';
+        els.userCard.hidden = false;
+        els.heroGreeting.textContent = greeting() + ', ' + name;
+    }
 
     // Start-up after sign-in, once per run.
 
@@ -688,32 +902,33 @@
         await flows.firstRun(state.settings);
         hideOverlay();
 
-        const [nicknames, panelSettings] = await Promise.all([api.getNicknames(), api.getPanelSettings()]);
+        const nicknames = await api.getNicknames();
         state.nicknames = nicknames.ok ? nicknames.nicknames : {};
-        state.panel = panelSettings.panel || { hidden: false, collapsed: false };
-        menu.setPanelShown(!state.panel.hidden);
+        await presets.load();
 
         const list = await readAccounts();
         setAccounts(list || []);
         restoreSelection();
-        layout();
+        renderCards();
         await refreshVersionList();
         await refreshProfiles();
-        await applyProfileForSelection();
         await setupRam(state.settings.client_ram);
         els.proxy.value = state.settings.proxyip || '';
+        side.start();
 
         await runClientUpdateCheck();
         scheduleUpdateChecks();
         startAccountsWatch();
+        loadLevels();
         if (state.accounts.length > 0) {
             refreshFromJagex(true);
         }
     }
 
     const signin = PX.createSignin({
-        onSignedIn: () => {
+        onSignedIn: (user) => {
             menu.setSignedIn(true);
+            showUser(user);
             if (state.initialised) {
                 return;
             }
@@ -724,8 +939,12 @@
                 PX.showError('The launcher could not finish starting: ' + err.message);
             });
         },
-        onSignedOut: () => menu.setSignedIn(false)
+        onSignedOut: () => {
+            menu.setSignedIn(false);
+            showUser(null);
+        }
     });
 
+    renderCards();
     signin.check();
 })();

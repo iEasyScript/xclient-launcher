@@ -2,13 +2,11 @@
 <html lang="en-GB">
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src 'none'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Project X Launcher</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="ember-wash" aria-hidden="true"></div>
-
 <header class="titlebar">
     <button id="menu-button" class="tb-button tb-menu" type="button" aria-label="Menu" title="Menu" aria-haspopup="menu" aria-expanded="false" aria-controls="app-menu">
         <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -36,7 +34,7 @@
 </header>
 
 <div id="app-menu" class="popup app-menu" role="menu" aria-label="Launcher menu" hidden>
-    <button id="menu-panel" class="menu-item" type="button" role="menuitemcheckbox" aria-checked="true">
+    <button id="menu-panel" class="menu-item" type="button" role="menuitemcheckbox" aria-checked="true" hidden>
         <span>Accounts panel</span><span class="menu-check" aria-hidden="true">&#10003;</span>
     </button>
     <div class="menu-sub-wrap">
@@ -52,98 +50,171 @@
     </div>
 </div>
 
-<main class="main">
-    <section class="hero">
-        <video id="hero-video" class="hero-video" src="../../assets/hero.mp4" autoplay loop muted playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-hidden="true"></video>
-        <div class="hero-scrim" aria-hidden="true"></div>
-        <div class="hero-vignette" aria-hidden="true"></div>
-
-        <aside id="accounts-panel" class="accounts-panel" aria-label="Your accounts" hidden>
-            <div class="panel-header">
-                <button id="panel-toggle" class="panel-toggle" type="button" aria-expanded="true" aria-controls="panel-body">
-                    <span class="panel-title">Your accounts</span>
-                    <span id="panel-count" class="count-badge">0</span>
-                    <span class="panel-caret" aria-hidden="true">&#9662;</span>
-                </button>
-                <button id="panel-refresh" class="icon-button" type="button" aria-label="Check the hiscores again" title="Check the hiscores again">&#10227;</button>
-                <button id="panel-hide" class="icon-button" type="button" aria-label="Hide the accounts panel" title="Hide this panel. You can bring it back from the menu.">&times;</button>
-            </div>
-            <div id="panel-body" class="panel-body">
-                <div id="panel-list" class="panel-list"></div>
-                <div class="panel-footer">Levels come from the public OSRS hiscores and are checked every 30 minutes.</div>
-            </div>
-        </aside>
-
-        <div class="hero-caption">
-            <div class="hero-wordmark">Project X</div>
-            <div class="hero-tagline">Old School automation, forged your way</div>
+<div class="shell">
+    <nav class="nav" aria-label="Launcher sections">
+        <div class="nav-brand">
+            <img class="nav-crest" src="../../images/projectx_transparent.png" alt="Project X crest" draggable="false">
+            <span class="nav-wordmark">Project X</span>
         </div>
-    </section>
-
-    <aside class="sidebar">
-        <div class="logo">
-            <img class="logo-crest" src="../../images/projectx_transparent.png" alt="Project X crest" draggable="false">
-            <div class="logo-text">Project X</div>
-        </div>
-
-        <div class="play-buttons">
-            <button id="play-normal" class="btn" type="button">Play Normal Account</button>
-            <button id="play-jagex" class="btn btn-primary" type="button">Login Jagex Account</button>
-        </div>
-
-        <div id="account-actions" class="account-actions" hidden>
-            <button id="add-accounts" class="btn btn-small" type="button">Add Accounts</button>
-            <button id="remove-all" class="btn btn-small btn-danger" type="button">Remove All</button>
-        </div>
-
-        <div class="multi">
-            <button id="multi-toggle" class="multi-toggle" type="button" aria-expanded="false" aria-controls="multi-panel">
-                <span>Launch several accounts</span><span class="multi-caret" aria-hidden="true">&#9656;</span>
+        <div class="nav-links">
+            <button class="nav-link active" type="button" data-view="play" aria-current="page">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                Play
             </button>
-            <div id="multi-panel" class="multi-panel" hidden>
-                <div class="multi-quick">
-                    <button id="multi-all" class="mini-button" type="button">All</button>
-                    <button id="multi-none" class="mini-button" type="button">None</button>
+            <button class="nav-link" type="button" data-view="presets">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                Launch presets
+            </button>
+            <button class="nav-link" type="button" data-view="settings">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2l3 3h4v4l3 3-3 3v4h-4l-3 3-3-3H5v-4l-3-3 3-3V5h4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                Settings
+            </button>
+        </div>
+        <div class="nav-foot">
+            <div id="user-card" class="user-card" hidden>
+                <div class="user-row">
+                    <span id="user-name" class="user-name"></span>
+                    <span id="user-tier" class="user-tier" hidden></span>
                 </div>
-                <div id="multi-list" class="multi-list"></div>
-                <label class="field-label" for="multi-gap">Gap between launches</label>
-                <select id="multi-gap" class="select">
-                    <option value="15">15 seconds</option>
-                    <option value="25" selected>25 seconds</option>
-                    <option value="40">40 seconds</option>
-                    <option value="60">60 seconds</option>
-                </select>
-                <p class="multi-hint">Each client needs a moment to read its login before the next one starts.</p>
-                <button id="multi-play" class="btn btn-primary" type="button" disabled>Play Selected (0)</button>
+                <div class="user-row user-balance-row">
+                    <span>Balance</span>
+                    <span id="user-balance" class="user-balance"></span>
+                </div>
+            </div>
+            <div id="client-status" class="client-status"><span class="status-dot" aria-hidden="true"></span><span id="client-status-text">Checking the client&hellip;</span></div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <section id="view-play" class="view" aria-label="Play">
+            <div class="view-scroll">
+                <section class="hero">
+                    <video id="hero-video" class="hero-video" src="../../assets/hero.mp4" autoplay loop muted playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-hidden="true"></video>
+                    <div class="hero-scrim" aria-hidden="true"></div>
+                    <div class="hero-body">
+                        <div class="hero-text">
+                            <span id="hero-greeting" class="eyebrow">Welcome back</span>
+                            <h1 id="hero-title" class="hero-title">Ready to play</h1>
+                            <p id="hero-subtitle" class="hero-subtitle">Tick accounts below and press Launch. Each one can start its own script the moment it logs in.</p>
+                        </div>
+                        <div class="hero-buttons">
+                            <button id="play-jagex" class="btn btn-primary btn-play" type="button">
+                                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>
+                                <span id="play-jagex-text">Add a Jagex account</span>
+                            </button>
+                            <button id="play-normal" class="btn btn-glass" type="button">Play normal account</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="accounts">
+                    <div class="section-head">
+                        <div class="section-title-row">
+                            <h2 class="section-title">Your accounts</h2>
+                            <span id="accounts-summary" class="section-meta"></span>
+                        </div>
+                        <div class="section-actions">
+                            <button id="select-all" class="btn btn-small" type="button">Select all</button>
+                            <button id="refresh-accounts" class="btn btn-small" type="button" title="Refresh the account list and update outdated names">Refresh</button>
+                            <button id="add-accounts" class="btn btn-small btn-strong" type="button">+ Add account</button>
+                        </div>
+                    </div>
+                    <div id="account-grid" class="account-grid"></div>
+                </section>
+            </div>
+
+            <div id="launch-bar" class="launch-bar">
+                <div class="launch-info">
+                    <span id="launch-label" class="launch-label">No accounts selected</span>
+                    <span id="launch-sub" class="launch-sub">Tick the accounts you want to open together</span>
+                </div>
                 <div id="multi-status" class="multi-status" role="status" aria-live="polite"></div>
+                <label class="launch-gap">
+                    Gap between launches
+                    <select id="multi-gap" class="select select-small">
+                        <option value="15">15 seconds</option>
+                        <option value="25" selected>25 seconds</option>
+                        <option value="40">40 seconds</option>
+                        <option value="60">60 seconds</option>
+                    </select>
+                </label>
+                <button id="multi-play" class="btn btn-primary btn-launch" type="button" disabled>Launch</button>
             </div>
-        </div>
+        </section>
 
-        <div class="box">
-            <label class="field-label" for="version-select">Version</label>
-            <select id="version-select" class="select"></select>
+        <section id="view-presets" class="view" aria-label="Launch presets" hidden>
+            <div class="presets-layout">
+                <aside class="preset-list-pane">
+                    <div class="pane-head">
+                        <h2 class="section-title">Presets</h2>
+                        <button id="preset-new" class="btn btn-small btn-strong" type="button">+ New</button>
+                    </div>
+                    <div id="preset-list" class="preset-list"></div>
+                    <p class="pane-hint">Give an account a preset from its card on Play.</p>
+                </aside>
+                <div id="preset-editor" class="preset-editor"></div>
+            </div>
+        </section>
 
-            <div id="account-field" hidden>
-                <div class="field-label" id="account-label">Jagex Account</div>
-                <div class="account-row">
-                    <div id="account-picker" class="picker"></div>
-                    <button id="refresh-accounts" class="refresh-button" type="button" aria-label="Refresh the account list" title="Refresh the account list and update outdated names">&#10227;</button>
+        <section id="view-settings" class="view" aria-label="Settings" hidden>
+            <div class="view-scroll settings">
+                <div class="settings-head">
+                    <span class="eyebrow">Settings</span>
+                    <h1 class="page-title">Launcher settings</h1>
+                    <p class="page-sub">These apply to every launch. A launch preset can set its own memory, proxy and settings profile for the accounts that use it.</p>
+                </div>
+                <div class="settings-grid">
+                    <section class="card">
+                        <h2 class="card-title">Client</h2>
+                        <label class="field">
+                            <span class="field-label">Version</span>
+                            <select id="version-select" class="select"></select>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Memory</span>
+                            <select id="ram-select" class="select"></select>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Proxy <span class="field-hint">optional &middot; SOCKS only</span></span>
+                            <input id="proxy-input" class="input" type="text" placeholder="ip:port:user:password" spellcheck="false" autocomplete="off">
+                        </label>
+                    </section>
+                    <section class="card">
+                        <h2 class="card-title">Normal account</h2>
+                        <label class="field">
+                            <span class="field-label">Settings profile</span>
+                            <select id="profile-select" class="select"></select>
+                        </label>
+                        <p class="card-note">Used by "Play normal account". Jagex accounts use the profile in their preset, or the one they last used.</p>
+                    </section>
+                    <section class="card">
+                        <h2 class="card-title">Jagex accounts</h2>
+                        <p class="card-note">Your saved Jagex accounts. Removing them here doesn't affect your Jagex logins.</p>
+                        <div class="card-actions">
+                            <button id="add-accounts-2" class="btn btn-small btn-strong" type="button">+ Add account</button>
+                            <button id="remove-all" class="btn btn-small btn-danger" type="button">Remove all</button>
+                        </div>
+                    </section>
                 </div>
             </div>
+        </section>
+    </main>
 
-            <label class="field-label" for="profile-select">Profile</label>
-            <select id="profile-select" class="select"></select>
-
-            <label class="field-label" for="ram-select">Client RAM</label>
-            <select id="ram-select" class="select"></select>
-        </div>
-
-        <div class="box">
-            <label class="field-label field-label-first" for="proxy-input">Proxy <span class="field-hint">optional &middot; SOCKS only</span></label>
-            <input id="proxy-input" class="input" type="text" placeholder="ip:port:user:password" spellcheck="false" autocomplete="off">
-        </div>
+    <aside class="side" aria-label="Activity">
+        <section class="side-section">
+            <div class="side-head">
+                <h2 class="side-title">Running now</h2>
+            </div>
+            <div id="running-list" class="running-list"></div>
+        </section>
+        <section class="side-section">
+            <div class="side-head">
+                <h2 class="side-title">What's new</h2>
+            </div>
+            <div id="news-list" class="news-list"></div>
+        </section>
     </aside>
-</main>
+</div>
 
 <div id="update-banner" class="update-banner" role="region" aria-label="Client update" hidden>
     <div class="update-content">
@@ -194,8 +265,8 @@
 <script src="js/dom.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/signin.js"></script>
-<script src="js/picker.js"></script>
-<script src="js/panel.js"></script>
+<script src="js/side.js"></script>
+<script src="js/presets.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

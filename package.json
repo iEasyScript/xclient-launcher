@@ -59,6 +59,7 @@
       "images/projectx_transparent.ico",
       "images/projectx_transparent.icns",
       "assets/hero.mp4",
+      "assets/fonts/**/*",
       "!**/*.map",
       "!test/**",
       "!coverage/**"
