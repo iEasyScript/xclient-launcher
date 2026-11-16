@@ -74,6 +74,50 @@ function scriptsFrom(body, now = Date.now()) {
     return out;
 }
 
+const SESSION_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+function shortText(value, max) {
+    return typeof value === 'string' && value ? value.slice(0, max) : null;
+}
+
+function finiteOrNull(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+// The site's live clients, reduced to what the launcher shows and checked field by field.
+function liveFrom(list) {
+    const out = [];
+    for (const item of Array.isArray(list) ? list : []) {
+        if (!item || !SESSION_ID.test(String(item.id))) {
+            continue;
+        }
+        const state = item.state && typeof item.state === 'object' ? item.state : null;
+        out.push({
+            id: String(item.id),
+            label: shortText(item.label, 80),
+            liveness: item.liveness === 'online' || item.liveness === 'stale' ? item.liveness : 'offline',
+            remoteControl: item.remoteControl === true,
+            stopping: item.stopping === true,
+            state: state ? {
+                loggedIn: state.loggedIn === true,
+                world: finiteOrNull(state.world),
+                name: shortText(state.name, 32),
+                breakActive: state.breakActive === true,
+                breakUntil: finiteOrNull(state.breakUntil),
+                scripts: (Array.isArray(state.scripts) ? state.scripts : []).slice(0, 5).map((s) => ({
+                    name: shortText(s && s.name, 80) || 'Script',
+                    internalName: s && typeof s.internalName === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(s.internalName) ? s.internalName : null,
+                    startedAt: finiteOrNull(s && s.startedAt),
+                    status: shortText(s && s.status, 120),
+                    xpPerHour: finiteOrNull(s && s.xpPerHour),
+                    skill: shortText(s && s.skill, 24)
+                }))
+            } : null
+        });
+    }
+    return out;
+}
+
 function createSiteData({ fetch, siteUrl, readToken, log, now = () => Date.now() }) {
     let news = null;
     let scripts = null;
@@ -107,6 +151,53 @@ function createSiteData({ fetch, siteUrl, readToken, log, now = () => Date.now()
                 return news ? { ok: true, items: news.items, stale: true } : { ok: false, error: 'The updates could not be loaded.', items: [] };
             }
         },
+        // The player's running clients and what each is doing, as the site's Control Panel sees
+        // them. A membership perk on the site: { ok: false, membersOnly: true } when it isn't theirs.
+        async liveClients() {
+            const token = readToken();
+            if (!token) {
+                return { ok: false, error: 'Sign in to see live status.', clients: [] };
+            }
+            try {
+                const response = await request(fetch, siteUrl + '/api/v1/launcher/live', {
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + token }
+                });
+                if (response.status === 403) {
+                    const message = response.body && typeof response.body.message === 'string' ? response.body.message.slice(0, 200) : 'Live status is a membership perk.';
+                    return { ok: false, membersOnly: true, error: message, clients: [] };
+                }
+                if (response.status !== 200 || !response.body || !Array.isArray(response.body.clients)) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return { ok: true, clients: liveFrom(response.body.clients) };
+            } catch (err) {
+                log.info('Could not load live client status: ' + err.message);
+                return { ok: false, error: 'Live status could not be loaded right now.', clients: [] };
+            }
+        },
+        // Asks a running client, through the site, to stop one script (internalName) or all.
+        async stopRemote(sessionId, internalName) {
+            const token = readToken();
+            if (!token) {
+                return { ok: false, error: 'Sign in again to control your clients.' };
+            }
+            const body = internalName ? { sessionId, type: 'STOP_SCRIPT', internalName } : { sessionId, type: 'STOP_ALL' };
+            try {
+                const response = await request(fetch, siteUrl + '/api/v1/launcher/live', {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                    body: JSON.stringify(body)
+                });
+                const answer = response.body;
+                if (answer && answer.ok === true) {
+                    return { ok: true };
+                }
+                return { ok: false, error: answer && typeof answer.error === 'string' ? answer.error.slice(0, 300) : 'The client could not be told to stop (HTTP ' + response.status + ').' };
+            } catch (err) {
+                log.info('Could not send a stop command: ' + err.message);
+                return { ok: false, error: 'The site could not be reached.' };
+            }
+        },
         async myScripts(force) {
             if (!force && scripts && now() - scripts.at < SCRIPTS_TTL_MS) {
                 return { ok: true, scripts: scripts.list };
@@ -128,4 +219,4 @@ function createSiteData({ fetch, siteUrl, readToken, log, now = () => Date.now()
     };
 }
 
-module.exports = { newsFrom, scriptsFrom, createSiteData };
+module.exports = { newsFrom, scriptsFrom, liveFrom, createSiteData };

@@ -69,6 +69,8 @@ const api = {
     getNews: call('px:site:news'),
     listRunning: call('px:running:list'),
     closeClient: call('px:running:close'),
+    listLiveClients: call('px:live:list'),
+    stopRemote: call('px:live:stop'),
     onRunningChanged: subscribe('px:event:running-changed'),
 
     showError: call('px:dialog:error'),

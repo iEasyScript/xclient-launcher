@@ -30,11 +30,11 @@ describe('preload bridge', () => {
             'accountsFileState', 'addJagexAccounts', 'appInfo', 'assignPreset', 'cancelPairing', 'checkClientUpdate',
             'close', 'closeClient', 'confirmOutdated', 'deleteAccount', 'deletePreset', 'downloadClient', 'getNews',
             'getNicknames', 'getNormalProfile', 'getPanelSettings', 'getPresets', 'getSession', 'getSettings',
-            'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listMyScripts', 'listProfiles',
+            'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listLiveClients', 'listMyScripts', 'listProfiles',
             'listRunning', 'log', 'lookupHiscores', 'minimize', 'onDownloadProgress', 'onPairingResult',
             'onRunningChanged', 'openLocation', 'refreshAccounts', 'removeAllAccounts', 'reopenPairingPage',
             'resolveClientVersion', 'savePreset', 'setAccountProfile', 'setNickname', 'setNormalProfile',
-            'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing', 'toggleMaximize'
+            'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing', 'stopRemote', 'toggleMaximize'
         ]);
         expect(Object.isFrozen(exposed.launcher)).toBe(true);
         for (const banned of ['invoke', 'send', 'on', 'sendSync', 'ipcRenderer']) {

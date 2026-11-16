@@ -863,6 +863,7 @@
     });
 
     const side = PX.createSide({
+        getAccounts: () => state.accounts,
         onRunningChange: (clients) => {
             state.running = clients;
             renderCards();

@@ -44,6 +44,8 @@ const CHANNELS = {
     getNews: 'px:site:news',
     listRunning: 'px:running:list',
     closeClient: 'px:running:close',
+    listLiveClients: 'px:live:list',
+    stopRemote: 'px:live:stop',
     showError: 'px:dialog:error',
     openLocation: 'px:locations:open',
     log: 'px:log:write'
@@ -151,6 +153,11 @@ function buildHandlers(ops) {
         [CHANNELS.closeClient]: {
             check: (...args) => args.length === 1 && v.isString(args[0], 32) && /^[a-f0-9]+$/.test(args[0]),
             run: (id) => ops.closeClient(id)
+        },
+        [CHANNELS.listLiveClients]: { check: none, run: () => ops.listLiveClients() },
+        [CHANNELS.stopRemote]: {
+            check: (...args) => args.length === 2 && v.isSessionId(args[0]) && (args[1] === null || v.isInternalName(args[1])),
+            run: (sessionId, internalName) => ops.stopRemote(sessionId, internalName)
         },
         [CHANNELS.showError]: {
             check: (...args) => args.length === 1 && v.isString(args[0], 2000),

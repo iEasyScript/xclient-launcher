@@ -120,6 +120,8 @@ module.exports = {
     isLaunchOptions,
     isPresetInput,
     isPresetId,
+    isSessionId: (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value),
+    isInternalName: (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value),
     isPanelPatch,
     isAccountId: isValidAccountId,
     isLocationKey: (value) => LOCATION_KEYS.includes(value),

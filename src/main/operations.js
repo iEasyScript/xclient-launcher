@@ -319,6 +319,8 @@ function createOperations(ctx) {
         getNews: (force) => siteData.news(force),
         listRunning: () => ({ ok: true, clients: running.list() }),
         closeClient: (id) => running.close(id),
+        listLiveClients: () => siteData.liveClients(),
+        stopRemote: (sessionId, internalName) => siteData.stopRemote(sessionId, internalName),
 
         showError,
         openLocation: async (key) => {

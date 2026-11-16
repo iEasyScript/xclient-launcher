@@ -173,3 +173,20 @@ describe('running registry', () => {
         expect(registry.close(id).ok).toBe(false);
     });
 });
+
+describe('liveFrom', () => {
+    const { liveFrom } = require('../src/main/site-data');
+
+    test('keeps checked fields and drops bad entries', () => {
+        const list = liveFrom([
+            { id: 'sess-aaaa1111', label: 'Desktop', liveness: 'online', remoteControl: true, state: { loggedIn: true, world: 302, name: 'osruney', scripts: [{ name: 'AIO Fighter X Slayer', internalName: 'AioFighterPlusPlugin', startedAt: 5, status: 'Slayer', xpPerHour: 41200, extra: 'x' }] } },
+            { id: 'bad id!', label: 'x' },
+            { id: 'sess-bbbb2222', liveness: 'weird', state: null },
+            { id: 'sess-cccc3333', state: { scripts: [{ name: 'Odd', internalName: '../x' }] } }
+        ]);
+        expect(list.map((c) => c.id)).toEqual(['sess-aaaa1111', 'sess-bbbb2222', 'sess-cccc3333']);
+        expect(list[0].state.scripts[0]).toEqual({ name: 'AIO Fighter X Slayer', internalName: 'AioFighterPlusPlugin', startedAt: 5, status: 'Slayer', xpPerHour: 41200, skill: null });
+        expect(list[1]).toMatchObject({ liveness: 'offline', remoteControl: false, state: null });
+        expect(list[2].state.scripts[0].internalName).toBeNull();
+    });
+});
