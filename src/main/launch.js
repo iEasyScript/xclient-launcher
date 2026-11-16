@@ -5,8 +5,9 @@ const { parseRam } = require('../shared/ram');
 const { writeFileAtomic } = require('./fsutil');
 const { redactProxy } = require('./redact');
 const { readNonJagexProfile } = require('./profiles');
+const { findJava, probeJava, MIN_MAJOR } = require('./java-finder');
 
-const JAVA_CHECK_TIMEOUT_MS = 5000;
+const JAVA_CHECK_TIMEOUT_MS = 15000;
 const CREDENTIALS_MODE = 0o600;
 const FALLBACK_HEAP = { xms: '512m', xmx: '600m', heapMb: 600 };
 const MAC_OPENS = ['--add-opens=java.desktop/sun.awt=ALL-UNNAMED', '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED'];
@@ -151,35 +152,9 @@ function javaDownloadUrl(platform, arch) {
     return 'https://adoptium.net/temurin/releases/?os=' + os + '&arch=' + cpu + '&package=jdk&version=17&mode=filter';
 }
 
-// Java counts as installed only if "java -version" exits 0 within five seconds.
-function checkJava(spawnFn, timeoutMs = JAVA_CHECK_TIMEOUT_MS) {
-    return new Promise((resolve) => {
-        let settled = false;
-        const done = (ok) => {
-            if (!settled) {
-                settled = true;
-                clearTimeout(timer);
-                resolve(ok);
-            }
-        };
-        let child;
-        const timer = setTimeout(() => {
-            try {
-                child && child.kill();
-            } catch (_) {
-                // already gone
-            }
-            done(false);
-        }, timeoutMs);
-        try {
-            child = spawnFn('java', ['-version'], { stdio: 'ignore', windowsHide: true });
-        } catch (_) {
-            done(false);
-            return;
-        }
-        child.on('error', () => done(false));
-        child.on('exit', (code) => done(code === 0));
-    });
+// Whether "java" on PATH runs. The launch itself uses findJava, which also looks elsewhere.
+async function checkJava(spawnFn, timeoutMs = JAVA_CHECK_TIMEOUT_MS) {
+    return (await probeJava(spawnFn, 'java', timeoutMs)).ok;
 }
 
 function createLauncher(deps) {
@@ -200,13 +175,18 @@ function createLauncher(deps) {
 
     const debug = isDebug(env);
 
-    async function promptForJava() {
+    async function promptForJava(olderMajor) {
+        const tooOld = typeof olderMajor === 'number';
         try {
             const { response } = await dialog.showMessageBox({
                 type: 'error',
-                title: 'Java Not Found',
-                message: 'A Java Development Kit (JDK) is required to run Project X.',
-                detail: 'Would you like to download it now?',
+                title: tooOld ? 'Newer Java Needed' : 'Java Not Found',
+                message: tooOld
+                    ? 'Java ' + olderMajor + ' is installed, but Project X needs Java ' + MIN_MAJOR + ' or newer.'
+                    : 'A Java Development Kit (JDK) is required to run Project X.',
+                detail: tooOld
+                    ? 'Would you like to download Java ' + MIN_MAJOR + ' now? It can be installed alongside the one you have.'
+                    : 'Java ' + MIN_MAJOR + ' or newer is needed. If you have just installed it, close the launcher and open it again, or restart your PC. Would you like to download it now?',
                 buttons: ['Yes, Download JDK', 'Cancel'],
                 defaultId: 0,
                 cancelId: 1
@@ -219,8 +199,7 @@ function createLauncher(deps) {
         }
     }
 
-    function spawnClient(args, childEnv) {
-        const executable = platform === 'win32' ? 'javaw' : 'java';
+    function spawnClient(executable, args, childEnv) {
         const child = spawn(executable, args, {
             detached: true,
             stdio: debug ? ['ignore', 'pipe', 'pipe'] : 'ignore',
@@ -272,21 +251,23 @@ function createLauncher(deps) {
         const proxyUri = buildProxyUri(proxy);
         const args = buildLaunchArgs({ platform, heap, jarPath, normal, proxyUri, profile });
 
-        const javaFound = await checkJava(spawn);
-        log.info('Java check: ' + (javaFound ? 'found' : 'not found'));
-        if (!javaFound) {
-            await promptForJava();
+        const java = await findJava({ spawn, platform, env, log });
+        if (!java.found) {
+            log.info('Java check: not found' + (java.olderMajor !== null ? ' (only Java ' + java.olderMajor + ')' : ''));
+            await promptForJava(java.olderMajor === null ? undefined : java.olderMajor);
             return { ok: false, silent: true, error: 'Java was not found.' };
         }
+        log.info('Java check: found' + (java.major !== null ? ' Java ' + java.major : '') + (java.source === 'PATH' ? ' on PATH' : ' at ' + java.command));
+        const executable = platform === 'win32' ? java.windowed : java.command;
 
         const token = readToken();
         if (token) {
             log.info('Launching client signed in to Project X');
         }
         const printable = args.map((arg) => (arg.startsWith('-proxy=') ? '-proxy=' + redactProxy(proxyUri) : arg));
-        log.info('Launching: ' + (platform === 'win32' ? 'javaw ' : 'java ') + printable.join(' '));
+        log.info('Launching: ' + executable + ' ' + printable.join(' '));
         try {
-            spawnClient(args, buildEnv(env, token, character));
+            spawnClient(executable, args, buildEnv(env, token, character));
         } catch (err) {
             log.error('Error running jar: ' + err.message);
             dialog.showErrorBox('Error running jar!', err.message);
