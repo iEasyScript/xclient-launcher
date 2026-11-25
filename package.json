@@ -1,6 +1,6 @@
 {
   "name": "projectx-launcher",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Launcher for the Project X client",
   "main": "src/main/index.js",
   "author": "Project X",

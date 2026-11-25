@@ -63,6 +63,12 @@
         return Math.max(0, Math.ceil((time - Date.now()) / 86400000));
     }
 
+    // Lifetime access ends on 9999-12-31: shown as "for life", not a count of days.
+    function isLifetime(iso) {
+        const time = Date.parse(iso);
+        return Number.isFinite(time) && new Date(time).getUTCFullYear() >= 9999;
+    }
+
     function selectOf(choices, value, onChange, className) {
         const select = PX.el('select', { className: className || 'select' }, choices.map((choice) => PX.el('option', { value: String(choice.value), text: choice.label })));
         select.value = String(value);
@@ -182,7 +188,10 @@
             } else if (owned) {
                 const left = daysLeft(owned.expiresAt);
                 const text = owned.trial ? 'Free trial' : 'Subscribed';
-                note = PX.el('span', { className: 'field-note good', text: left === null ? text : text + ' \u00B7 ' + left + (left === 1 ? ' day left' : ' days left') });
+                const detail = isLifetime(owned.expiresAt)
+                    ? 'Owned for life'
+                    : left === null ? text : text + ' \u00B7 ' + left + (left === 1 ? ' day left' : ' days left');
+                note = PX.el('span', { className: 'field-note good', text: detail });
             } else {
                 note = PX.el('span', { className: 'field-note warn', text: 'You don\u2019t have access right now, so it won\u2019t start.' });
             }
