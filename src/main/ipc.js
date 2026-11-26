@@ -11,6 +11,7 @@ const CHANNELS = {
     startPairing: 'px:auth:start-pairing',
     cancelPairing: 'px:auth:cancel-pairing',
     reopenPairingPage: 'px:auth:reopen-pairing-page',
+    copyPairingLink: 'px:auth:copy-pairing-link',
     signOut: 'px:auth:sign-out',
     getSettings: 'px:settings:get',
     setSetting: 'px:settings:set',
@@ -70,6 +71,7 @@ function buildHandlers(ops) {
         [CHANNELS.startPairing]: { check: none, run: () => ops.startPairing() },
         [CHANNELS.cancelPairing]: { check: none, run: () => ops.cancelPairing() },
         [CHANNELS.reopenPairingPage]: { check: none, run: () => ops.reopenPairingPage() },
+        [CHANNELS.copyPairingLink]: { check: none, run: () => ops.copyPairingLink() },
         [CHANNELS.signOut]: { check: none, run: () => ops.signOut() },
         [CHANNELS.getSettings]: { check: none, run: () => ops.getSettings() },
         [CHANNELS.setSetting]: {

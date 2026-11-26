@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const childProcess = require('child_process');
-const { app, BrowserWindow, dialog, ipcMain, net, shell, session } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell, session } = require('electron');
 const log = require('electron-log/main');
 
 const { scrubValue } = require('./redact');
@@ -14,6 +14,7 @@ const { LAUNCHER_FEED_URL } = require('./launcher-version');
 const { createSettingsStore } = require('./settings');
 const { createNicknameStore } = require('./nicknames');
 const { createAccountService } = require('./account');
+const { createUrlOpener } = require('./open-url');
 const { createClientService } = require('./client-service');
 const { createAccountsStore } = require('./jagex/accounts');
 const { findBrowser, launchBrowser } = require('./jagex/browser');
@@ -66,11 +67,13 @@ function start() {
     const fetchImpl = createAppFetch({ net, userAgent, isOwnUrl: (url) => ownPrefixes.some((prefix) => url.startsWith(prefix)) });
     const settings = createSettingsStore({ file: paths.settingsFile, log });
     const nicknames = createNicknameStore({ settings });
+    const openUrl = createUrlOpener({ openExternal: (url) => shell.openExternal(url), spawn: childProcess.spawn, log });
     const account = createAccountService({
         sessionFile: path.join(app.getPath('userData'), 'projectx-session.json'),
         siteUrl,
         fetch: fetchImpl,
-        openExternal: (url) => shell.openExternal(url),
+        openExternal: openUrl,
+        copyText: (text) => clipboard.writeText(text),
         notify: (payload) => emit('pairingResult', payload),
         log
     });
@@ -88,7 +91,7 @@ function start() {
             showMessageBox: messageBox,
             showErrorBox: (title, content) => dialog.showErrorBox(title, content)
         },
-        openExternal: (url) => shell.openExternal(url),
+        openExternal: openUrl,
         readToken: () => account.readToken(),
         accounts,
         presets,

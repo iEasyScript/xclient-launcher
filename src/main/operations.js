@@ -66,6 +66,7 @@ function createOperations(ctx) {
             account.cancelPairing();
         },
         reopenPairingPage: () => account.reopenPairingPage(),
+        copyPairingLink: () => account.copyPairingLink(),
         signOut: () => {
             try {
                 account.signOut();

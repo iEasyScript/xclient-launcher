@@ -12,18 +12,20 @@ const DEVICE = 'device-code-fake-secret-value';
 
 afterEach(cleanupTempDirs);
 
-function setup({ fetch, now, sleep } = {}) {
+function setup({ fetch, now, sleep, openExternal } = {}) {
     const dir = makeTempDir();
     const sessionFile = path.join(dir, 'projectx-session.json');
     const log = makeLog();
     const events = [];
     const opened = [];
+    const copied = [];
     let clock = 1763215200000;
     const service = createAccountService({
         sessionFile,
         siteUrl: SITE,
         fetch,
-        openExternal: async (url) => opened.push(url),
+        openExternal: openExternal || (async (url) => opened.push(url)),
+        copyText: (text) => copied.push(text),
         notify: (payload) => events.push(payload),
         log,
         hostname: 'DESKTOP-TEST',
@@ -33,7 +35,7 @@ function setup({ fetch, now, sleep } = {}) {
             clock += ms;
         })
     });
-    return { service, sessionFile, log, events, opened, advance: (ms) => { clock += ms; } };
+    return { service, sessionFile, log, events, opened, copied, advance: (ms) => { clock += ms; } };
 }
 
 function startResponse(extra = {}) {
@@ -136,6 +138,22 @@ describe('pairing', () => {
         expect(result.ok).toBe(true);
         expect(opened).toEqual([]);
         expect(service.reopenPairingPage()).toBe(false);
+    });
+
+    test('a browser that cannot be opened keeps waiting and offers the link', async () => {
+        const fetch = makeFetch((url) => (url.endsWith('/pair/start') ? startResponse() : jsonResponse(202, { status: 'pending' })));
+        const openExternal = async () => {
+            throw new Error('Failed to open: Application not found (0x800401F5)');
+        };
+        const { service, events, copied } = setup({ fetch, openExternal, sleep: () => new Promise(() => {}) });
+        const result = await service.startPairing();
+        expect(result.ok).toBe(true);
+        await waitFor(() => events.length > 0);
+        expect(events).toEqual([{ type: 'open-failed', url: 'https://xclient.dev/pair?code=BCDF-2345' }]);
+        expect(service.copyPairingLink()).toBe(true);
+        expect(copied).toEqual(['https://xclient.dev/pair?code=BCDF-2345']);
+        service.cancelPairing();
+        expect(service.copyPairingLink()).toBe(false);
     });
 
     test('a refusal surfaces the server message', async () => {

@@ -28,7 +28,7 @@ describe('preload bridge', () => {
         expect(Object.keys(exposed)).toEqual(['launcher']);
         expect(Object.keys(exposed.launcher).sort()).toEqual([
             'accountsFileState', 'addJagexAccounts', 'appInfo', 'assignPreset', 'cancelPairing', 'checkClientUpdate',
-            'close', 'closeClient', 'confirmOutdated', 'deleteAccount', 'deletePreset', 'downloadClient', 'getNews',
+            'close', 'closeClient', 'confirmOutdated', 'copyPairingLink', 'deleteAccount', 'deletePreset', 'downloadClient', 'getNews',
             'getNicknames', 'getNormalProfile', 'getPanelSettings', 'getPresets', 'getSession', 'getSettings',
             'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listLiveClients', 'listMyScripts', 'listProfiles',
             'listRunning', 'log', 'lookupHiscores', 'minimize', 'onDownloadProgress', 'onPairingResult',

@@ -711,6 +711,27 @@ button {
     color: var(--text-faint);
 }
 
+.pairing-open-failed {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: var(--molten-hi);
+}
+
+.pairing-address {
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    word-break: break-all;
+    user-select: text;
+}
+
+.pairing-links {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+}
+
 .pairing-link {
     display: inline-block;
     margin-top: 12px;

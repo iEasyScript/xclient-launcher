@@ -26,6 +26,7 @@
 
         function showDiscordView() {
             pairing.hidden = true;
+            PX.$('pairing-open-failed').hidden = true;
             discord.hidden = false;
             discord.disabled = false;
             discord.textContent = 'Sign in with Discord';
@@ -83,6 +84,9 @@
             }
             code.textContent = result.userCode || '';
             PX.$('pairing-reopen').hidden = !result.verificationUrl;
+            PX.$('pairing-copy').hidden = !result.verificationUrl;
+            PX.$('pairing-copy').textContent = 'Copy link';
+            PX.$('pairing-address').textContent = result.verificationUrl || '';
             discord.hidden = true;
             pairing.hidden = false;
         });
@@ -92,6 +96,17 @@
             PX.api.reopenPairingPage().catch(() => {});
         });
 
+        PX.$('pairing-copy').addEventListener('click', async (event) => {
+            event.preventDefault();
+            const link = PX.$('pairing-copy');
+            try {
+                const copied = await PX.api.copyPairingLink();
+                link.textContent = copied ? 'Copied!' : 'Copy link';
+            } catch (err) {
+                PX.log('warn', 'Could not copy the sign-in link: ' + err.message);
+            }
+        });
+
         PX.$('pairing-cancel').addEventListener('click', () => {
             PX.api.cancelPairing().catch(() => {});
             showDiscordView();
@@ -99,6 +114,11 @@
         });
 
         PX.api.onPairingResult((payload) => {
+            if (payload && payload.type === 'open-failed') {
+                // Still waiting for approval: keep the code on screen and point at the link.
+                PX.$('pairing-open-failed').hidden = false;
+                return;
+            }
             showDiscordView();
             if (!payload) {
                 return;

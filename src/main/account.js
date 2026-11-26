@@ -23,6 +23,7 @@ function createAccountService(options) {
         siteUrl,
         fetch: fetchImpl,
         openExternal,
+        copyText = () => {},
         notify,
         log,
         hostname = os.hostname(),
@@ -187,7 +188,7 @@ function createAccountService(options) {
         };
         pending = pairing;
         if (pairing.url) {
-            openPage(pairing.url);
+            openPage(pairing);
         } else {
             log.warn('The sign-in page address was not on the Project X site, so it was not opened');
         }
@@ -206,15 +207,29 @@ function createAccountService(options) {
         };
     }
 
-    function openPage(url) {
+    function openPage(pairing) {
         Promise.resolve()
-            .then(() => openExternal(url))
-            .catch((err) => log.warn('Could not open the sign-in page: ' + errorMessage(err)));
+            .then(() => openExternal(pairing.url))
+            .catch((err) => {
+                log.warn('Could not open the sign-in page: ' + errorMessage(err));
+                if (pending === pairing) {
+                    // The dialog stays open and offers the link to copy instead.
+                    push({ type: 'open-failed', url: pairing.url });
+                }
+            });
     }
 
     function reopenPairingPage() {
         if (pending && pending.url) {
-            openPage(pending.url);
+            openPage(pending);
+            return true;
+        }
+        return false;
+    }
+
+    function copyPairingLink() {
+        if (pending && pending.url) {
+            copyText(pending.url);
             return true;
         }
         return false;
@@ -233,7 +248,7 @@ function createAccountService(options) {
         log.info('Signed out of Project X');
     }
 
-    return { getSession, startPairing, cancelPairing, reopenPairingPage, signOut, readToken, readSession };
+    return { getSession, startPairing, cancelPairing, reopenPairingPage, copyPairingLink, signOut, readToken, readSession };
 }
 
 module.exports = { createAccountService, EXPIRED_MESSAGE, PAIRING_DEADLINE_MS, pollIntervalMs };

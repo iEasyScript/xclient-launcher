@@ -27,6 +27,7 @@ const api = {
     startPairing: call('px:auth:start-pairing'),
     cancelPairing: call('px:auth:cancel-pairing'),
     reopenPairingPage: call('px:auth:reopen-pairing-page'),
+    copyPairingLink: call('px:auth:copy-pairing-link'),
     signOut: call('px:auth:sign-out'),
     onPairingResult: subscribe('px:event:pairing-result'),
 

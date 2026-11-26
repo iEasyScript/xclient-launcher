@@ -250,7 +250,12 @@
             <p class="pairing-intro">Approve this launcher in your browser:</p>
             <div id="pairing-code" class="pairing-code" aria-live="polite"></div>
             <p class="pairing-hint">Check the code on the website matches this one before you approve.</p>
-            <a id="pairing-reopen" class="pairing-link" href="#">Open the page again</a>
+            <p id="pairing-open-failed" class="pairing-open-failed" hidden>Your browser didn't open. Copy this link and paste it into your browser:</p>
+            <div id="pairing-address" class="pairing-address"></div>
+            <div class="pairing-links">
+                <a id="pairing-reopen" class="pairing-link" href="#">Open the page again</a>
+                <a id="pairing-copy" class="pairing-link" href="#">Copy link</a>
+            </div>
             <div><button id="pairing-cancel" class="pairing-cancel" type="button">Cancel</button></div>
         </div>
         <div id="signin-error" class="signin-error" role="alert"></div>
