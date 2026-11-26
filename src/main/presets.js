@@ -5,6 +5,7 @@ const { readJson, writeJson, isPlainObject } = require('./fsutil');
 const { isValidAccountId } = require('./nicknames');
 const { isValidProfileName } = require('./profiles');
 const { parseRam } = require('../shared/ram');
+const { isVpnId } = require('./vpn-store');
 
 // Launch presets: what a client does by itself once it opens for an account. Stored in the
 // launcher's own folder; the client is handed one preset at launch (see toClientPreset).
@@ -20,6 +21,9 @@ const DELAYS = ['random', 'none'];
 const BREAKS = ['keep', 'off', 'normal', 'short'];
 const WHEN_STOPPED = ['logout-close', 'logout', 'stay'];
 const STOP_AFTER = [0, 60, 120, 180, 240, 360, 480];
+// direct: no connection of its own (the launcher-wide proxy setting applies, if there is one);
+// proxy: the preset's own SOCKS proxy; vpn: a WireGuard config run by the bundled helper.
+const CONNECTIONS = ['direct', 'proxy', 'vpn'];
 
 // Play/break minute ranges handed to the client for each break choice.
 const BREAK_RANGES = {
@@ -38,6 +42,8 @@ const DEFAULT_PRESET = Object.freeze({
     profile: 'default',
     ram: '',
     proxy: '',
+    connection: 'direct',
+    vpn: null,
     breaks: 'keep',
     stopAfterMinutes: 0,
     whenStopped: 'logout-close'
@@ -58,6 +64,31 @@ function isWorldNumber(value) {
     return Number.isInteger(value) && value >= 301 && value <= 650;
 }
 
+// What a preset keeps about its WireGuard config: an id and what the UI shows. The config itself,
+// with its private key, lives in the VPN store and is never part of a preset.
+function normaliseVpn(value) {
+    if (!isPlainObject(value) || !isVpnId(value.id)) {
+        return null;
+    }
+    const text = (item, max) => (typeof item === 'string' ? item.replace(INVISIBLE, '').trim().slice(0, max) : '');
+    return {
+        id: value.id,
+        name: text(value.name, 60) || 'WireGuard',
+        endpoint: text(value.endpoint, 300),
+        encrypted: value.encrypted === true
+    };
+}
+
+// Presets saved before the connection choice existed have none: a proxy means Proxy, otherwise
+// Direct. A choice without what it needs falls back to Direct.
+function normaliseConnection(source, proxy, vpn) {
+    const chosen = CONNECTIONS.includes(source.connection) ? source.connection : proxy ? 'proxy' : 'direct';
+    if ((chosen === 'proxy' && !proxy) || (chosen === 'vpn' && !vpn)) {
+        return 'direct';
+    }
+    return chosen;
+}
+
 function newPresetId() {
     return crypto.randomBytes(8).toString('hex');
 }
@@ -72,6 +103,9 @@ function normalisePreset(raw, id) {
     const world = isPlainObject(source.world) ? source.world : {};
     const script = typeof source.script === 'string' && INTERNAL_NAME.test(source.script) ? source.script : null;
     const ram = typeof source.ram === 'string' && source.ram !== '' && parseRam(source.ram) ? source.ram : '';
+    const proxyText = typeof source.proxy === 'string' ? source.proxy.trim().slice(0, 512) : '';
+    const vpn = normaliseVpn(source.vpn);
+    const connection = normaliseConnection(source, proxyText, vpn);
     return {
         id: isPresetId(id) ? id : isPresetId(source.id) ? source.id : newPresetId(),
         name: cleanName(source.name),
@@ -86,7 +120,9 @@ function normalisePreset(raw, id) {
         },
         profile: source.profile === 'default' || isValidProfileName(source.profile) ? source.profile : 'default',
         ram,
-        proxy: typeof source.proxy === 'string' ? source.proxy.trim().slice(0, 512) : '',
+        proxy: connection === 'proxy' ? proxyText : '',
+        connection,
+        vpn: connection === 'vpn' ? vpn : null,
         breaks: pick(source.breaks, BREAKS, DEFAULT_PRESET.breaks),
         stopAfterMinutes: STOP_AFTER.includes(source.stopAfterMinutes) ? source.stopAfterMinutes : 0,
         whenStopped: pick(source.whenStopped, WHEN_STOPPED, DEFAULT_PRESET.whenStopped)
@@ -118,7 +154,7 @@ function normaliseStore(raw) {
     return { v: 1, presets, assignments };
 }
 
-// What the client receives in PROJECTX_LAUNCH_PRESET. Proxy, memory and the settings profile
+// What the client receives in PROJECTX_LAUNCH_PRESET. Proxy, VPN, memory and the settings profile
 // are applied by the launcher itself and are never part of it.
 function toClientPreset(preset) {
     const p = normalisePreset(preset, preset && preset.id);
@@ -199,6 +235,10 @@ function createPresetStore({ file, log }) {
             return presetId ? store.presets.find((item) => item.id === presetId) || null : null;
         },
         // Used when characters are deleted, so their assignments do not linger.
+        // The VPN configs the presets refer to, so unused ones can be deleted.
+        vpnIds() {
+            return new Set(read().presets.filter((item) => item.vpn).map((item) => item.vpn.id));
+        },
         unassign(accountIds) {
             const store = read();
             const targets = accountIds === 'all' ? Object.keys(store.assignments) : accountIds;
@@ -220,6 +260,7 @@ module.exports = {
     BREAKS,
     WHEN_STOPPED,
     STOP_AFTER,
+    CONNECTIONS,
     DEFAULT_PRESET,
     isPresetId,
     normalisePreset,

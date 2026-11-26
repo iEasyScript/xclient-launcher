@@ -6,6 +6,7 @@ const { isValidProfileName } = require('./profiles');
 const { parseRam } = require('../shared/ram');
 const { LOCATION_KEYS } = require('./locations');
 const { isPresetId } = require('./presets');
+const { isVpnId } = require('./vpn-store');
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'];
 
@@ -61,14 +62,14 @@ function isLaunchOptions(value, requireAccount) {
 }
 
 const PRESET_KEYS = ['id', 'name', 'script', 'scriptName', 'startAfterLogin', 'delay', 'autoLogin', 'world', 'profile',
-    'ram', 'proxy', 'breaks', 'stopAfterMinutes', 'whenStopped'];
+    'ram', 'proxy', 'connection', 'vpn', 'breaks', 'stopAfterMinutes', 'whenStopped'];
 
 // A preset from the renderer: the right shape and sizes. presets.js normalises the values.
 function isPresetInput(value) {
     if (!isPlainObject(value) || !hasOnlyKeys(value, PRESET_KEYS)) {
         return false;
     }
-    const strings = { name: 80, scriptName: 120, delay: 16, profile: 128, ram: 16, proxy: 512, breaks: 16, whenStopped: 16 };
+    const strings = { name: 80, scriptName: 120, delay: 16, profile: 128, ram: 16, proxy: 512, connection: 16, breaks: 16, whenStopped: 16 };
     for (const [key, max] of Object.entries(strings)) {
         if (value[key] !== undefined && !isString(value[key], max)) {
             return false;
@@ -87,6 +88,17 @@ function isPresetInput(value) {
     }
     if (value.stopAfterMinutes !== undefined && !Number.isInteger(value.stopAfterMinutes)) {
         return false;
+    }
+    // Only a reference to a saved config; the main process fills in what is shown from the store.
+    if (value.vpn !== undefined && value.vpn !== null) {
+        const vpn = value.vpn;
+        if (!isPlainObject(vpn) || !hasOnlyKeys(vpn, ['id', 'name', 'endpoint', 'encrypted']) || !isVpnId(vpn.id)) {
+            return false;
+        }
+        if ((vpn.name !== undefined && !isString(vpn.name, 120)) || (vpn.endpoint !== undefined && !isString(vpn.endpoint, 300))
+            || (vpn.encrypted !== undefined && typeof vpn.encrypted !== 'boolean')) {
+            return false;
+        }
     }
     if (value.world !== undefined) {
         const world = value.world;
@@ -120,6 +132,7 @@ module.exports = {
     isLaunchOptions,
     isPresetInput,
     isPresetId,
+    isVpnId,
     isSessionId: (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value),
     isInternalName: (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value),
     isPanelPatch,

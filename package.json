@@ -1,6 +1,6 @@
 {
   "name": "projectx-launcher",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Launcher for the Project X client",
   "main": "src/main/index.js",
   "author": "Project X",
@@ -15,6 +15,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "fetch-helper": "node scripts/fetch-helper.js",
     "win": "electron-builder --win --publish never",
     "mac": "electron-builder --mac --publish never",
     "linux": "electron-builder --linux --publish never",
@@ -64,6 +65,12 @@
       "!test/**",
       "!coverage/**"
     ],
+    "extraResources": [
+      {
+        "from": "resources/licenses",
+        "to": "licenses"
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "iEasyScript",
@@ -71,7 +78,16 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "images/projectx_transparent.ico"
+      "icon": "images/projectx_transparent.ico",
+      "extraResources": [
+        {
+          "from": "vendor/wireproxy/win32-x64",
+          "to": "wireproxy",
+          "filter": [
+            "wireproxy.exe"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -96,7 +112,16 @@
           ]
         }
       ],
-      "icon": "images/projectx_transparent.icns"
+      "icon": "images/projectx_transparent.icns",
+      "extraResources": [
+        {
+          "from": "vendor/wireproxy/darwin-universal",
+          "to": "wireproxy",
+          "filter": [
+            "wireproxy"
+          ]
+        }
+      ]
     },
     "dmg": {
       "icon": "images/projectx_transparent.icns",
@@ -130,7 +155,16 @@
         "AppImage"
       ],
       "icon": "images/projectx_transparent.png",
-      "category": "Game"
+      "category": "Game",
+      "extraResources": [
+        {
+          "from": "vendor/wireproxy/linux-x64",
+          "to": "wireproxy",
+          "filter": [
+            "wireproxy"
+          ]
+        }
+      ]
     }
   }
 }

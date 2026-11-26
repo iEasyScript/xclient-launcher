@@ -29,7 +29,11 @@ describe('package identity', () => {
     });
 
     test('Windows installer', () => {
-        expect(build.win).toEqual({ target: 'nsis', icon: 'images/projectx_transparent.ico' });
+        expect(build.win).toEqual({
+            target: 'nsis',
+            icon: 'images/projectx_transparent.ico',
+            extraResources: [{ from: 'vendor/wireproxy/win32-x64', to: 'wireproxy', filter: ['wireproxy.exe'] }]
+        });
         expect(build.nsis).toEqual({
             oneClick: false,
             allowToChangeInstallationDirectory: true,
@@ -72,7 +76,12 @@ describe('package identity', () => {
     });
 
     test('Linux builds the AppImage only', () => {
-        expect(build.linux).toEqual({ target: ['AppImage'], icon: 'images/projectx_transparent.png', category: 'Game' });
+        expect(build.linux).toEqual({
+            target: ['AppImage'],
+            icon: 'images/projectx_transparent.png',
+            category: 'Game',
+            extraResources: [{ from: 'vendor/wireproxy/linux-x64', to: 'wireproxy', filter: ['wireproxy'] }]
+        });
     });
 
     test('packaged files include the app, the video and icons, and exclude maps and tests', () => {
@@ -86,6 +95,63 @@ describe('package identity', () => {
     test('only the runtime dependencies the app uses ship', () => {
         expect(Object.keys(pkg.dependencies).sort()).toEqual(['detect-browsers', 'electron-log', 'electron-updater', 'patchright']);
         expect(pkg.license).toBe('SEE LICENSE IN LICENSE');
+    });
+});
+
+describe('VPN helper packaging', () => {
+    const pins = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'wireproxy.json'), 'utf8'));
+    const { helperTarget, helperFileName } = require('../src/main/vpn');
+
+    test('each platform packages its own pinned helper into resources/wireproxy', () => {
+        const byPlatform = { win: ['win32', 'x64'], mac: ['darwin', 'arm64'], linux: ['linux', 'x64'] };
+        for (const [key, [platform, arch]] of Object.entries(byPlatform)) {
+            const target = helperTarget(platform, arch);
+            expect(pins.targets[target]).toBeDefined();
+            expect(build[key].extraResources).toEqual([{ from: 'vendor/wireproxy/' + target, to: 'wireproxy', filter: [helperFileName(platform)] }]);
+            expect(pins.targets[target].binary).toBe(helperFileName(platform));
+        }
+        expect(helperTarget('darwin', 'x64')).toBe('darwin-universal');
+        expect(helperTarget('win32', 'arm64')).toBe('win32-x64');
+        expect(helperTarget('linux', 'arm64')).toBeNull();
+        expect(pins.targets['darwin-universal'].universal).toBe(true);
+    });
+
+    test('the pins name one release and a SHA-256 for every asset', () => {
+        expect(pins.version).toMatch(/^\d+\.\d+\.\d+$/);
+        expect(pins.releaseUrl).toBe('https://github.com/pufferffish/wireproxy/releases/download/v' + pins.version + '/');
+        expect(Object.keys(pins.targets).sort()).toEqual(['darwin-universal', 'linux-x64', 'win32-x64']);
+        for (const pin of Object.values(pins.targets)) {
+            expect(pin.asset).toMatch(/^wireproxy_[a-z0-9_]+\.tar\.gz$/);
+            expect(pin.sha256).toMatch(/^[a-f0-9]{64}$/);
+        }
+    });
+
+    test('the licence ships with the app and the binaries are never committed', () => {
+        expect(build.extraResources).toEqual([{ from: 'resources/licenses', to: 'licenses' }]);
+        const licence = fs.readFileSync(path.join(ROOT, 'resources', 'licenses', 'wireproxy.txt'), 'utf8');
+        expect(licence).toContain('Permission to use, copy, modify, and distribute this software for any');
+        expect(licence).toContain(pins.version);
+        expect(fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8')).toMatch(/^vendor\/$/m);
+        expect(build.files.some((pattern) => pattern.startsWith('vendor'))).toBe(false);
+        expect(pkg.scripts['fetch-helper']).toBe('node scripts/fetch-helper.js');
+    });
+
+    test('the tar reader finds the binary and the universal check reads the Mach-O magic', () => {
+        const { extractFromTar, isUniversalMachO } = require('../scripts/fetch-helper');
+        function entry(name, body) {
+            const header = Buffer.alloc(512);
+            header.write(name, 0, 'utf8');
+            header.write(body.length.toString(8).padStart(11, '0'), 124, 'ascii');
+            header.write('0', 156, 'ascii');
+            const data = Buffer.alloc(Math.ceil(body.length / 512) * 512);
+            body.copy(data);
+            return Buffer.concat([header, data]);
+        }
+        const tar = Buffer.concat([entry('LICENSE', Buffer.from('ISC')), entry('wireproxy', Buffer.from('binary!')), Buffer.alloc(1024)]);
+        expect(extractFromTar(tar, 'wireproxy').toString()).toBe('binary!');
+        expect(() => extractFromTar(tar, 'wireproxy.exe')).toThrow('not found');
+        expect(isUniversalMachO(Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2]))).toBe(true);
+        expect(isUniversalMachO(Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]))).toBe(false);
     });
 });
 

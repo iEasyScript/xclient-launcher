@@ -41,6 +41,8 @@ const CHANNELS = {
     savePreset: 'px:presets:save',
     deletePreset: 'px:presets:delete',
     assignPreset: 'px:presets:assign',
+    importVpnConfig: 'px:vpn:import',
+    testVpnConfig: 'px:vpn:test',
     listMyScripts: 'px:site:my-scripts',
     getNews: 'px:site:news',
     listRunning: 'px:running:list',
@@ -142,6 +144,11 @@ function buildHandlers(ops) {
         [CHANNELS.assignPreset]: {
             check: (...args) => args.length === 2 && v.isAccountId(args[0]) && (args[1] === null || v.isPresetId(args[1])),
             run: (accountId, presetId) => ops.assignPreset(accountId, presetId)
+        },
+        [CHANNELS.importVpnConfig]: { check: none, run: () => ops.importVpnConfig() },
+        [CHANNELS.testVpnConfig]: {
+            check: (...args) => args.length === 1 && v.isVpnId(args[0]),
+            run: (vpnId) => ops.testVpnConfig(vpnId)
         },
         [CHANNELS.listMyScripts]: {
             check: (...args) => args.length === 1 && typeof args[0] === 'boolean',

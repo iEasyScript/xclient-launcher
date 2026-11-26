@@ -8,7 +8,10 @@ const PATTERNS = [
     [/("(?:token|deviceCode|device_code|sessionId|session_id|idToken|id_token|access_token|refresh_token|code|code_verifier)"\s*:\s*")[^"]*"/gi, '$1***"'],
     [/\b(JX_(?:SESSION_ID|ACCESS_TOKEN|REFRESH_TOKEN)=)[^\s]+/g, '$1***'],
     [/(Bearer\s+)[^\s"',]+/gi, '$1***'],
-    [/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***:***@']
+    [/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***:***@'],
+    // WireGuard configs: key settings, the helper's local proxy login, and any bare 32-byte key.
+    [/\b((?:PrivateKey|PresharedKey|PreSharedKey|PublicKey|Password|Username)\s*=\s*)[^\s"',]+/gi, '$1***'],
+    [/(^|[^A-Za-z0-9+/])[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=(?![A-Za-z0-9+/=])/g, '$1***']
 ];
 
 function scrub(text) {

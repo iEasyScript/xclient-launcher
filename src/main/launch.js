@@ -174,6 +174,7 @@ function createLauncher(deps) {
         presets = null,
         toClientPreset = null,
         running = null,
+        vpn = null,
         env = process.env,
         argv = process.argv,
         platform = process.platform,
@@ -246,6 +247,10 @@ function createLauncher(deps) {
         if (!fs.existsSync(jarPath)) {
             return { ok: false, error: 'Client ' + version + ' is not installed.' };
         }
+        const useVpn = Boolean(preset && preset.connection === 'vpn' && preset.vpn);
+        if (useVpn && !vpn) {
+            return { ok: false, error: 'VPN presets are not available in this copy of the launcher.' };
+        }
         if (character) {
             try {
                 writeFileAtomic(paths.credentialsFile, credentialsText(character, now()), { mode: CREDENTIALS_MODE });
@@ -256,8 +261,6 @@ function createLauncher(deps) {
         }
         const heap = resolveHeap(ram, ramFromArgv(argv), log);
         log.info('Client memory from ' + heap.source + ': ' + heap.xmx);
-        const proxyUri = buildProxyUri(proxy);
-        const args = buildLaunchArgs({ platform, heap, jarPath, normal, proxyUri, profile });
 
         const java = await findJava({ spawn, platform, env, log });
         if (!java.found) {
@@ -267,6 +270,20 @@ function createLauncher(deps) {
         }
         log.info('Java check: found' + (java.major !== null ? ' Java ' + java.major : '') + (java.source === 'PATH' ? ' on PATH' : ' at ' + java.command));
         const executable = platform === 'win32' ? java.windowed : java.command;
+
+        // A VPN preset's client goes through its own helper's local SOCKS5 proxy, exactly as a
+        // proxy preset would. Started only once Java is known to be there.
+        let lease = null;
+        let proxyUri = buildProxyUri(proxy);
+        if (useVpn) {
+            const acquired = await vpn.acquire(preset.vpn.id, preset.name);
+            if (!acquired.ok) {
+                return { ok: false, error: 'The VPN for "' + preset.name + '" could not start. ' + acquired.error };
+            }
+            lease = acquired.lease;
+            proxyUri = lease.proxyUri;
+        }
+        const args = buildLaunchArgs({ platform, heap, jarPath, normal, proxyUri, profile });
 
         const token = readToken();
         if (token) {
@@ -280,6 +297,9 @@ function createLauncher(deps) {
         }
         try {
             const child = spawnClient(executable, args, buildEnv(env, token, character, clientPreset));
+            if (lease) {
+                lease.attach(child);
+            }
             if (running) {
                 running.add(child, {
                     label: label || (character ? characterName(character) : 'Normal account'),
@@ -289,6 +309,9 @@ function createLauncher(deps) {
                 });
             }
         } catch (err) {
+            if (lease) {
+                lease.release();
+            }
             log.error('Error running jar: ' + err.message);
             dialog.showErrorBox('Error running jar!', err.message);
             return { ok: false, silent: true, error: err.message };
@@ -296,8 +319,8 @@ function createLauncher(deps) {
         return { ok: true };
     }
 
-    // An account's preset, if it has one; its memory, proxy and settings profile take the place of
-    // the launcher-wide ones wherever the preset sets them.
+    // An account's preset, if it has one; its memory, connection and settings profile take the
+    // place of the launcher-wide ones wherever the preset sets them.
     function presetFor(accountId) {
         if (!presets) {
             return null;
@@ -324,7 +347,7 @@ function createLauncher(deps) {
         return start({
             version,
             ram: preset && preset.ram ? preset.ram : ram,
-            proxy: preset && preset.proxy ? preset.proxy : proxy,
+            proxy: preset && preset.connection === 'proxy' && preset.proxy ? preset.proxy : proxy,
             normal: false,
             character,
             profile: presetProfile || savedProfile,

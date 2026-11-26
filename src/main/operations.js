@@ -29,7 +29,10 @@ function createOperations(ctx) {
         emit,
         presets = null,
         siteData = null,
-        running = null
+        running = null,
+        vpnStore = null,
+        vpn = null,
+        pickConfigFile = null
     } = ctx;
 
     let jagexLoginRunning = false;
@@ -44,6 +47,31 @@ function createOperations(ctx) {
             await showError('Could not ask for confirmation: ' + err.message);
             return false;
         }
+    }
+
+    // Deletes saved WireGuard configs no preset uses any more.
+    function sweepVpnConfigs() {
+        if (!vpnStore || !presets) {
+            return;
+        }
+        try {
+            vpnStore.sweep(presets.vpnIds());
+        } catch (err) {
+            log.warn('Could not tidy the saved WireGuard configs: ' + err.message);
+        }
+    }
+
+    // A preset as the renderer sent it, with its VPN details taken from the store rather than
+    // trusted from the page.
+    function withStoredVpn(preset) {
+        if (preset.connection !== 'vpn') {
+            return { preset: { ...preset, vpn: null } };
+        }
+        const info = vpnStore && preset.vpn ? vpnStore.info(preset.vpn.id) : null;
+        if (!info) {
+            return { error: 'Import a WireGuard config for this preset, or pick another connection.' };
+        }
+        return { preset: { ...preset, vpn: info } };
     }
 
     async function showError(message) {
@@ -282,7 +310,15 @@ function createOperations(ctx) {
         },
         savePreset: (preset) => {
             try {
-                const { store, preset: saved } = presets.save(preset);
+                const checked = withStoredVpn(preset);
+                if (checked.error) {
+                    return { ok: false, error: checked.error };
+                }
+                const { store, preset: saved } = presets.save(checked.preset);
+                if (saved.vpn && vpnStore) {
+                    vpnStore.settle(saved.vpn.id);
+                }
+                sweepVpnConfigs();
                 return { ok: true, preset: saved, ...store };
             } catch (err) {
                 log.warn('Could not save a launch preset: ' + err.message);
@@ -303,9 +339,48 @@ function createOperations(ctx) {
                 return { ok: false, cancelled: true };
             }
             try {
-                return { ok: true, ...presets.remove(presetId) };
+                const store = presets.remove(presetId);
+                sweepVpnConfigs();
+                return { ok: true, ...store };
             } catch (err) {
                 log.warn('Could not delete a launch preset: ' + err.message);
+                return failure(err);
+            }
+        },
+        // Picks a .conf file and saves it. Only the name, endpoint and any warnings come back.
+        importVpnConfig: async () => {
+            if (!vpnStore || !pickConfigFile) {
+                return { ok: false, error: 'VPN presets are not available in this copy of the launcher.' };
+            }
+            let file;
+            try {
+                file = await pickConfigFile();
+            } catch (err) {
+                log.warn('Could not open the file picker: ' + err.message);
+                return failure(err);
+            }
+            if (!file) {
+                return { ok: false, cancelled: true };
+            }
+            try {
+                const result = vpnStore.importFile(file);
+                if (!result.ok) {
+                    log.info('A WireGuard config was not accepted: ' + result.error);
+                }
+                return result;
+            } catch (err) {
+                log.warn('Could not save a WireGuard config: ' + err.message);
+                return { ok: false, error: 'The config could not be saved: ' + err.message };
+            }
+        },
+        testVpnConfig: async (vpnId) => {
+            if (!vpn) {
+                return { ok: false, error: 'VPN presets are not available in this copy of the launcher.' };
+            }
+            try {
+                return await vpn.test(vpnId, 'a connection test');
+            } catch (err) {
+                log.warn('The VPN test failed: ' + err.message);
                 return failure(err);
             }
         },

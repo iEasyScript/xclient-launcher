@@ -46,10 +46,17 @@
         profile: 'default',
         ram: '',
         proxy: '',
+        connection: 'direct',
+        vpn: null,
         breaks: 'keep',
         stopAfterMinutes: 0,
         whenStopped: 'logout-close'
     };
+    const CONNECTION_CHOICES = [
+        { value: 'direct', label: 'Direct' },
+        { value: 'proxy', label: 'Proxy' },
+        { value: 'vpn', label: 'VPN (WireGuard)' }
+    ];
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -104,6 +111,8 @@
             store: { presets: [], assignments: {} },
             scripts: [],
             scriptsError: null,
+            vpnWarnings: [],
+            vpnTest: null,
             profiles: [],
             currentId: null,
             draft: null,
@@ -226,10 +235,103 @@
             return field('Memory', select);
         }
 
-        function proxyControl(draft) {
-            const input = PX.el('input', { className: 'input', type: 'text', placeholder: 'Launcher setting', spellcheck: 'false', autocomplete: 'off', value: draft.proxy || '' });
-            input.addEventListener('change', () => change({ proxy: input.value.trim().slice(0, 512) }));
-            return field('Proxy', input, PX.el('span', { className: 'field-note', text: 'SOCKS, ip:port:user:pass' }));
+        async function importVpn() {
+            const result = await PX.api.importVpnConfig();
+            if (result.cancelled) {
+                return;
+            }
+            if (!result.ok) {
+                await PX.showError('Could not use that WireGuard config: ' + result.error);
+                return;
+            }
+            state.vpnWarnings = Array.isArray(result.warnings) ? result.warnings : [];
+            state.vpnTest = null;
+            change({ connection: 'vpn', vpn: result.vpn });
+        }
+
+        async function testVpn(vpnId) {
+            state.vpnTest = { kind: 'busy', text: 'Connecting through the VPN...' };
+            renderEditor();
+            let result;
+            try {
+                result = await PX.api.testVpnConfig(vpnId);
+            } catch (err) {
+                result = { ok: false, error: err.message };
+            }
+            if (!state.draft || !state.draft.vpn || state.draft.vpn.id !== vpnId) {
+                return;
+            }
+            state.vpnTest = result.ok
+                ? { kind: 'good', text: 'Connected. Sites see ' + result.ip + (result.country ? ' (' + result.country + ')' : '') + '.' }
+                : { kind: 'warn', text: result.error };
+            renderEditor();
+        }
+
+        function vpnPanel(draft) {
+            if (!draft.vpn) {
+                const importButton = PX.el('button', { className: 'btn btn-small', type: 'button', text: 'Import WireGuard config' });
+                importButton.addEventListener('click', () => PX.runBusy(importButton, importVpn, 300));
+                return [
+                    importButton,
+                    PX.el('span', { className: 'field-note', text: 'A .conf file from your VPN provider. Only clients using this preset connect through it; nothing else on this PC changes.' })
+                ];
+            }
+            const vpn = draft.vpn;
+            const busy = Boolean(state.vpnTest && state.vpnTest.kind === 'busy');
+            const test = PX.el('button', { className: 'btn btn-small', type: 'button', text: 'Test connection' });
+            test.disabled = busy;
+            test.addEventListener('click', () => testVpn(vpn.id));
+            const replace = PX.el('button', { className: 'btn btn-small btn-ghost', type: 'button', text: 'Replace' });
+            replace.disabled = busy;
+            replace.addEventListener('click', () => PX.runBusy(replace, importVpn, 300));
+            const remove = PX.el('button', { className: 'btn btn-small btn-ghost', type: 'button', text: 'Remove' });
+            remove.disabled = busy;
+            remove.addEventListener('click', () => {
+                state.vpnWarnings = [];
+                state.vpnTest = null;
+                change({ vpn: null });
+            });
+            const parts = [
+                PX.el('div', { className: 'vpn-box' }, [
+                    PX.el('span', { className: 'vpn-name', text: vpn.name }),
+                    PX.el('span', { className: 'vpn-endpoint', text: vpn.endpoint ? 'Server ' + vpn.endpoint : 'WireGuard' })
+                ]),
+                PX.el('div', { className: 'vpn-actions' }, [test, replace, remove])
+            ];
+            if (!vpn.encrypted) {
+                parts.push(PX.el('span', { className: 'field-note warn', text: 'Kept unencrypted on this PC: no system key store is available to protect the private key.' }));
+            }
+            for (const warning of state.vpnWarnings) {
+                parts.push(PX.el('span', { className: 'field-note', text: warning }));
+            }
+            if (state.vpnTest) {
+                parts.push(PX.el('span', { className: 'field-note vpn-status' + (state.vpnTest.kind === 'busy' ? '' : ' ' + state.vpnTest.kind), text: state.vpnTest.text }));
+            }
+            return parts;
+        }
+
+        function connectionControl(draft) {
+            const seg = PX.el('div', { className: 'segmented three', role: 'radiogroup', 'aria-label': 'Connection' }, CONNECTION_CHOICES.map((choice) => {
+                const button = PX.el('button', { className: 'seg', type: 'button', role: 'radio', 'aria-checked': draft.connection === choice.value ? 'true' : 'false', text: choice.label });
+                button.addEventListener('click', () => {
+                    if (draft.connection !== choice.value) {
+                        state.vpnTest = null;
+                        change({ connection: choice.value });
+                    }
+                });
+                return button;
+            }));
+            const parts = [PX.el('span', { className: 'field-label', text: 'Connection' }), seg];
+            if (draft.connection === 'proxy') {
+                const input = PX.el('input', { className: 'input', type: 'text', placeholder: 'ip:port:user:password', spellcheck: 'false', autocomplete: 'off', value: draft.proxy || '', 'aria-label': 'Proxy' });
+                input.addEventListener('change', () => change({ proxy: input.value.trim().slice(0, 512) }));
+                parts.push(input, PX.el('span', { className: 'field-note', text: 'SOCKS, ip:port:user:pass' }));
+            } else if (draft.connection === 'vpn') {
+                parts.push(...vpnPanel(draft));
+            } else {
+                parts.push(PX.el('span', { className: 'field-note', text: 'No connection of its own. The proxy in Settings applies, if you set one.' }));
+            }
+            return PX.el('div', { className: 'field' }, parts);
         }
 
         function profileControl(draft) {
@@ -294,7 +396,8 @@
                         worldControl(draft),
                         toggle('Log in automatically', 'With the Jagex account the client opens for', draft.autoLogin, (value) => change({ autoLogin: value })),
                         profileControl(draft),
-                        PX.el('div', { className: 'two-col' }, [ramControl(draft), proxyControl(draft)])
+                        ramControl(draft),
+                        connectionControl(draft)
                     ]),
                     PX.el('section', { className: 'card' }, [
                         PX.el('h3', { className: 'card-title' }, [PX.el('span', { className: 'step', text: '3' }), 'Breaks and stopping']),
@@ -353,6 +456,8 @@
                 state.draft = null;
             }
             state.dirty = false;
+            state.vpnWarnings = [];
+            state.vpnTest = null;
             renderList();
             renderEditor();
         }
@@ -361,6 +466,8 @@
             state.currentId = null;
             state.draft = clone(NEW_PRESET);
             state.dirty = true;
+            state.vpnWarnings = [];
+            state.vpnTest = null;
             renderList();
             renderEditor();
         }

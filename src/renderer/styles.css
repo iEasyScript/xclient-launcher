@@ -1756,6 +1756,47 @@ button {
     box-shadow: var(--focus-ring);
 }
 
+.segmented.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.vpn-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--obsidian-1);
+    min-width: 0;
+}
+
+.vpn-name {
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.vpn-endpoint {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+}
+
+.vpn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.vpn-status {
+    white-space: pre-line;
+    max-height: 160px;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+}
+
 .two-col {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

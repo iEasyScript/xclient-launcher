@@ -59,7 +59,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Fetch and verify the VPN helper
+        run: npm run fetch-helper
       - run: npm run win
+      - name: Check the VPN helper and its licence are in the app
+        shell: bash
+        run: |
+          test -f dist/win-unpacked/resources/wireproxy/wireproxy.exe
+          test -f dist/win-unpacked/resources/licenses/wireproxy.txt
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -82,11 +89,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Fetch and verify the VPN helper
+        run: npm run fetch-helper
       - run: npm run linux
       - name: Check the Linux output
         run: |
           ls dist/*.AppImage
           test -f dist/latest-linux.yml
+          test -x dist/linux-unpacked/resources/wireproxy/wireproxy
+          test -f dist/linux-unpacked/resources/licenses/wireproxy.txt
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -108,6 +119,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Fetch and verify the VPN helper
+        run: npm run fetch-helper
       - run: npm run mac
       - name: Check the macOS output is complete and universal
         run: |
@@ -128,6 +141,16 @@ jobs:
           case "$archs" in
             *arm64*) ;;
             *) echo "::error::The build is not universal (no arm64)"; exit 1 ;;
+          esac
+          app="${binary%/Contents/MacOS/*}"
+          helper="$app/Contents/Resources/wireproxy/wireproxy"
+          test -x "$helper" || { echo "::error::The VPN helper is missing from the app"; exit 1; }
+          test -f "$app/Contents/Resources/licenses/wireproxy.txt"
+          helper_archs="$(lipo -archs "$helper")"
+          echo "VPN helper architectures: $helper_archs"
+          case "$helper_archs" in
+            *x86_64*arm64*|*arm64*x86_64*) ;;
+            *) echo "::error::The VPN helper is not universal"; exit 1 ;;
           esac
       - uses: actions/upload-artifact@v4
         with:

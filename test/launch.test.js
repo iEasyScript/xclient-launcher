@@ -53,6 +53,12 @@ describe('launch arguments', () => {
         expect(args).toEqual(['-Xms2g', '-Xmx2g', ...GC, '-jar', '/j.jar', '-clean-jagex-launcher', '-proxy=socks5://h:1']);
     });
 
+    test('a VPN preset passes its local SOCKS5 proxy with the helper login', () => {
+        const args = buildLaunchArgs({ platform: 'win32', heap: HEAP_2G, jarPath: 'C:\\j.jar', normal: false, proxyUri: 'socks5://a1b2c3d4e5f60718:0123456789abcdef0123456789abcdef@127.0.0.1:41000', profile: 'Slayer' });
+        expect(args.slice(-2)).toEqual(['-proxy=socks5://a1b2c3d4e5f60718:0123456789abcdef0123456789abcdef@127.0.0.1:41000', '-profile=Slayer']);
+        expect(redactProxy('socks5://a1b2c3d4e5f60718:0123456789abcdef0123456789abcdef@127.0.0.1:41000')).toBe('socks5://***:***@127.0.0.1:41000');
+    });
+
     test('macOS puts the add-opens flags first', () => {
         const args = buildLaunchArgs({ platform: 'darwin', heap: HEAP_2G, jarPath: '/j.jar', normal: false, proxyUri: null, profile: null });
         expect(args.slice(0, 3)).toEqual([
@@ -196,7 +202,7 @@ describe('Java', () => {
 });
 
 describe('launcher', () => {
-    function setup({ platform = 'win32', javaExit = 0, token = 'px_faketoken123', env = {} } = {}) {
+    function setup({ platform = 'win32', javaExit = 0, token = 'px_faketoken123', env = {}, extra = {} } = {}) {
         const home = makeTempDir();
         const paths = createPaths(home);
         fs.mkdirSync(paths.projectxDir, { recursive: true });
@@ -238,7 +244,8 @@ describe('launcher', () => {
             env: { PATH: '/bin', ...env },
             argv: ['electron', '.'],
             platform,
-            arch: 'x64'
+            arch: 'x64',
+            ...extra
         });
         return { paths, log, spawn, events, dialog, openExternal, launcher, setToken: (value) => { currentToken = value; } };
     }
@@ -330,6 +337,88 @@ describe('launcher', () => {
         const { launcher, paths } = setup({ platform: 'linux' });
         await launcher.launchJagex({ accountId: '111', version: '2.0.0' });
         expect(fs.statSync(paths.credentialsFile).mode & 0o777).toBe(0o600);
+    });
+
+    describe('connection from the preset', () => {
+        const { normalisePreset, toClientPreset } = require('../src/main/presets');
+        const VPN_URI = 'socks5://a1b2c3d4e5f60718:0123456789abcdef0123456789abcdef@127.0.0.1:41000';
+
+        function withPreset(raw, vpnResult = null) {
+            const preset = normalisePreset({ name: 'Sweden', ...raw });
+            const lease = { proxyUri: VPN_URI, attach: jest.fn(), release: jest.fn() };
+            const vpn = { acquire: jest.fn(async () => vpnResult || { ok: true, lease }) };
+            const ctx = setup({ extra: { presets: { forAccount: () => preset }, toClientPreset, vpn } });
+            return { ...ctx, preset, lease, vpn };
+        }
+
+        test('a VPN preset launches through its helper exactly like a proxy preset', async () => {
+            const { launcher, events, lease, vpn, log } = withPreset({ connection: 'vpn', vpn: { id: '0123456789abcdef', name: 'se', endpoint: 'se:51820' } });
+            const result = await launcher.launchJagex({ accountId: '111', version: '2.0.0', proxy: 'launcher-wide:1080' });
+            expect(result).toEqual({ ok: true });
+            expect(vpn.acquire).toHaveBeenCalledWith('0123456789abcdef', 'Sweden');
+            const [launch] = clientLaunches(events);
+            expect(launch.args).toContain('-proxy=' + VPN_URI);
+            expect(launch.args.join(' ')).not.toContain('launcher-wide');
+            expect(lease.attach).toHaveBeenCalledWith(expect.any(EventEmitter));
+            expect(lease.release).not.toHaveBeenCalled();
+            expect(JSON.parse(launch.options.env.PROJECTX_LAUNCH_PRESET)).not.toHaveProperty('vpn');
+            expect(log.all()).toContain('-proxy=socks5://***:***@127.0.0.1:41000');
+            expect(log.all()).not.toContain('0123456789abcdef0123456789abcdef');
+        });
+
+        test('a VPN that cannot start stops the launch with its reason', async () => {
+            const { launcher, events } = withPreset(
+                { connection: 'vpn', vpn: { id: '0123456789abcdef' } },
+                { ok: false, error: 'The VPN helper is missing from this copy of the launcher.' }
+            );
+            const result = await launcher.launchJagex({ accountId: '111', version: '2.0.0' });
+            expect(result.ok).toBe(false);
+            expect(result.error).toContain('The VPN for "Sweden" could not start.');
+            expect(result.error).toContain('helper is missing');
+            expect(clientLaunches(events)).toHaveLength(0);
+        });
+
+        test('the VPN is not started when Java is missing', async () => {
+            const preset = normalisePreset({ name: 'Sweden', connection: 'vpn', vpn: { id: '0123456789abcdef' } });
+            const vpn = { acquire: jest.fn() };
+            const { launcher } = setup({ javaExit: 1, extra: { presets: { forAccount: () => preset }, toClientPreset, vpn } });
+            await launcher.launchJagex({ accountId: '111', version: '2.0.0' });
+            expect(vpn.acquire).not.toHaveBeenCalled();
+        });
+
+        test('a VPN preset in a launcher without VPN support is refused', async () => {
+            const preset = normalisePreset({ name: 'Sweden', connection: 'vpn', vpn: { id: '0123456789abcdef' } });
+            const { launcher, events } = setup({ extra: { presets: { forAccount: () => preset }, toClientPreset } });
+            await expect(launcher.launchJagex({ accountId: '111', version: '2.0.0' })).resolves.toMatchObject({ ok: false });
+            expect(clientLaunches(events)).toHaveLength(0);
+        });
+
+        test('a client that fails to spawn gives its VPN lease back', async () => {
+            const { launcher, lease, spawn, dialog } = withPreset({ connection: 'vpn', vpn: { id: '0123456789abcdef' } });
+            const original = spawn.getMockImplementation();
+            spawn.mockImplementation((command, args, options) => {
+                if (args[0] === '-version') {
+                    return original(command, args, options);
+                }
+                throw new Error('EACCES');
+            });
+            await expect(launcher.launchJagex({ accountId: '111', version: '2.0.0' })).resolves.toMatchObject({ ok: false, error: 'EACCES' });
+            expect(lease.release).toHaveBeenCalled();
+            expect(dialog.showErrorBox).toHaveBeenCalled();
+        });
+
+        test('Proxy uses the preset proxy; Direct uses the launcher-wide setting', async () => {
+            const proxied = withPreset({ connection: 'proxy', proxy: 'own:1080' });
+            await proxied.launcher.launchJagex({ accountId: '111', version: '2.0.0', proxy: 'launcher-wide:1080' });
+            expect(clientLaunches(proxied.events)[0].args).toContain('-proxy=socks5://own:1080');
+            expect(proxied.vpn.acquire).not.toHaveBeenCalled();
+            const direct = withPreset({ connection: 'direct' });
+            await direct.launcher.launchJagex({ accountId: '111', version: '2.0.0', proxy: 'launcher-wide:1080' });
+            expect(clientLaunches(direct.events)[0].args).toContain('-proxy=socks5://launcher-wide:1080');
+            const old = withPreset({ proxy: 'legacy:1080' });
+            await old.launcher.launchJagex({ accountId: '111', version: '2.0.0', proxy: 'launcher-wide:1080' });
+            expect(clientLaunches(old.events)[0].args).toContain('-proxy=socks5://legacy:1080');
+        });
     });
 
     test('jar path is inside ~/.projectx', async () => {

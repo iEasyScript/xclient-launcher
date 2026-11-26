@@ -357,7 +357,9 @@
             } else if (preset.world.mode === 'free') {
                 parts.push('Any free world');
             }
-            if (preset.proxy) {
+            if (preset.connection === 'vpn') {
+                parts.push('VPN');
+            } else if (preset.proxy) {
                 parts.push('Own proxy');
             }
             if (preset.ram) {

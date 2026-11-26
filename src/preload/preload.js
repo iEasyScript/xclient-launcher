@@ -66,6 +66,8 @@ const api = {
     savePreset: call('px:presets:save'),
     deletePreset: call('px:presets:delete'),
     assignPreset: call('px:presets:assign'),
+    importVpnConfig: call('px:vpn:import'),
+    testVpnConfig: call('px:vpn:test'),
     listMyScripts: call('px:site:my-scripts'),
     getNews: call('px:site:news'),
     listRunning: call('px:running:list'),

@@ -30,11 +30,11 @@ describe('preload bridge', () => {
             'accountsFileState', 'addJagexAccounts', 'appInfo', 'assignPreset', 'cancelPairing', 'checkClientUpdate',
             'close', 'closeClient', 'confirmOutdated', 'copyPairingLink', 'deleteAccount', 'deletePreset', 'downloadClient', 'getNews',
             'getNicknames', 'getNormalProfile', 'getPanelSettings', 'getPresets', 'getSession', 'getSettings',
-            'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listLiveClients', 'listMyScripts', 'listProfiles',
+            'importVpnConfig', 'launchJagex', 'launchNormal', 'listAccounts', 'listInstalledClients', 'listLiveClients', 'listMyScripts', 'listProfiles',
             'listRunning', 'log', 'lookupHiscores', 'minimize', 'onDownloadProgress', 'onPairingResult',
             'onRunningChanged', 'openLocation', 'refreshAccounts', 'removeAllAccounts', 'reopenPairingPage',
             'resolveClientVersion', 'savePreset', 'setAccountProfile', 'setNickname', 'setNormalProfile',
-            'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing', 'stopRemote', 'toggleMaximize'
+            'setPanelSettings', 'setSetting', 'showError', 'signOut', 'startPairing', 'stopRemote', 'testVpnConfig', 'toggleMaximize'
         ]);
         expect(Object.isFrozen(exposed.launcher)).toBe(true);
         for (const banned of ['invoke', 'send', 'on', 'sendSync', 'ipcRenderer']) {
@@ -109,6 +109,14 @@ describe('main-process handlers', () => {
             ['111']
         ],
         [CHANNELS.launchNormal]: [[{ version: '2.0.0', accountId: '111' }], [{}]],
+        [CHANNELS.importVpnConfig]: [['/home/x/vpn.conf']],
+        [CHANNELS.testVpnConfig]: [[], ['../etc/passwd'], ['ABCDEF0123456789'], ['0123456789abcdef', 'extra'], [{ id: '0123456789abcdef' }]],
+        [CHANNELS.savePreset]: [
+            [{ connection: 'vpn', vpn: { id: '0123456789abcdef', privateKey: 'x' } }],
+            [{ connection: 'vpn', vpn: { id: '../x' } }],
+            [{ connection: 'vpn', vpn: 'text' }],
+            [{ connection: 5 }]
+        ],
         [CHANNELS.showError]: [['x'.repeat(2001)], [{}]],
         [CHANNELS.openLocation]: [['C:\\Windows'], ['/etc'], ['launcherlogs']],
         [CHANNELS.log]: [['fatal', 'x'], ['info', 5]]
@@ -130,6 +138,10 @@ describe('main-process handlers', () => {
         expect(handlers[CHANNELS.openLocation].check('clientLogs')).toBe(true);
         expect(handlers[CHANNELS.lookupHiscores].check('Iron Wick', false)).toBe(true);
         expect(handlers[CHANNELS.setAccountProfile].check('111', 'default')).toBe(true);
+        expect(handlers[CHANNELS.importVpnConfig].check()).toBe(true);
+        expect(handlers[CHANNELS.testVpnConfig].check('0123456789abcdef')).toBe(true);
+        expect(handlers[CHANNELS.savePreset].check({ name: 'VPN', connection: 'vpn', vpn: { id: '0123456789abcdef', name: 'se-1', endpoint: 'se1.example.net:51820', encrypted: true } })).toBe(true);
+        expect(handlers[CHANNELS.savePreset].check({ name: 'Old', proxy: '1.2.3.4:1080' })).toBe(true);
     });
 
     test('registered handlers refuse untrusted senders and invalid arguments', async () => {

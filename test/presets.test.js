@@ -55,6 +55,52 @@ describe('normalisePreset', () => {
     });
 });
 
+describe('connection choice', () => {
+    const VPN = { id: '0123456789abcdef', name: 'se-sto-001', endpoint: 'se-1.example.net:51820', encrypted: true };
+
+    test('presets saved before 3.4.0 become Proxy when they had a proxy, otherwise Direct', () => {
+        expect(normalisePreset({ name: 'Old', proxy: '1.2.3.4:1080' })).toMatchObject({ connection: 'proxy', proxy: '1.2.3.4:1080', vpn: null });
+        expect(normalisePreset({ name: 'Old', proxy: '' })).toMatchObject({ connection: 'direct', proxy: '', vpn: null });
+        expect(normalisePreset({ name: 'Old' })).toMatchObject({ connection: 'direct', proxy: '', vpn: null });
+    });
+
+    test('an old presets file on disk migrates as it is read and keeps working', () => {
+        const file = tempFile();
+        fs.writeFileSync(file, JSON.stringify({ v: 1, presets: [
+            { id: 'aaaaaaaaaaaaaaaa', name: 'With proxy', proxy: 'host:1080:bob:pw' },
+            { id: 'bbbbbbbbbbbbbbbb', name: 'Without' }
+        ], assignments: { '111': 'aaaaaaaaaaaaaaaa' } }));
+        const store = createPresetStore({ file, log: quietLog });
+        const [withProxy, without] = store.list().presets;
+        expect(withProxy).toMatchObject({ connection: 'proxy', proxy: 'host:1080:bob:pw' });
+        expect(without).toMatchObject({ connection: 'direct', proxy: '' });
+        expect(store.forAccount('111').connection).toBe('proxy');
+    });
+
+    test('a choice without what it needs falls back to Direct, and other choices drop the proxy', () => {
+        expect(normalisePreset({ connection: 'proxy', proxy: '  ' }).connection).toBe('direct');
+        expect(normalisePreset({ connection: 'vpn', vpn: null }).connection).toBe('direct');
+        expect(normalisePreset({ connection: 'vpn', vpn: { id: '../etc' } }).connection).toBe('direct');
+        expect(normalisePreset({ connection: 'direct', proxy: '1.2.3.4:1080' })).toMatchObject({ connection: 'direct', proxy: '' });
+        expect(normalisePreset({ connection: 'vpn', vpn: VPN, proxy: '1.2.3.4:1080' })).toMatchObject({ connection: 'vpn', proxy: '', vpn: VPN });
+        expect(normalisePreset({ connection: 'proxy', proxy: 'h:1', vpn: VPN })).toMatchObject({ connection: 'proxy', vpn: null });
+        expect(normalisePreset({ connection: 'satellite', proxy: 'h:1' }).connection).toBe('proxy');
+    });
+
+    test('a VPN preset keeps only the config id, name and server', () => {
+        const p = normalisePreset({ connection: 'vpn', vpn: { ...VPN, privateKey: 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=', name: '  ' } });
+        expect(p.vpn).toEqual({ ...VPN, name: 'WireGuard' });
+        expect(JSON.stringify(p)).not.toContain('yAnz5TF');
+    });
+
+    test('vpnIds lists the configs presets refer to', () => {
+        const store = createPresetStore({ file: tempFile(), log: quietLog });
+        store.save({ name: 'VPN', connection: 'vpn', vpn: VPN });
+        store.save({ name: 'Plain' });
+        expect([...store.vpnIds()]).toEqual([VPN.id]);
+    });
+});
+
 describe('toClientPreset', () => {
     test('maps a preset to the client contract without proxy, memory or profile', () => {
         const preset = normalisePreset({ name: 'Slayer', script: 'AioFighterPlusPlugin', breaks: 'normal', world: { mode: 'world', number: 302 }, proxy: 'x:1', ram: '2g', profile: 'Slayer', stopAfterMinutes: 240 });
@@ -128,6 +174,11 @@ describe('isPresetInput', () => {
         expect(isPresetInput({ world: { mode: 'keep', other: 1 } })).toBe(false);
         expect(isPresetInput({ startAfterLogin: 'yes' })).toBe(false);
         expect(isPresetInput({ id: '../../x' })).toBe(false);
+        expect(isPresetInput({ connection: 'vpn', vpn: { id: '0123456789abcdef', name: 'se', endpoint: 'h:1', encrypted: false } })).toBe(true);
+        expect(isPresetInput({ connection: 'vpn', vpn: null })).toBe(true);
+        expect(isPresetInput({ connection: 'vpn', vpn: { id: '0123456789abcdef', config: '[Interface]' } })).toBe(false);
+        expect(isPresetInput({ connection: 'vpn', vpn: { id: 'nope' } })).toBe(false);
+        expect(isPresetInput({ connection: 'x'.repeat(17) })).toBe(false);
     });
 });
 
